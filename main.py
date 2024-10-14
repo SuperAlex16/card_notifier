@@ -307,24 +307,21 @@ import uuid
 deleted_payments = {}
 
 
-# Функция обновления статуса транзакции
-# def update_payment_status(payment_uuid, status):
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
-#     cursor.execute("""
-#         UPDATE transactions
-#         SET execution_status = ?
-#         WHERE uuid = ?
-#     """, (status, payment_uuid))
-#
-#     if cursor.rowcount > 0:
-#         conn.commit()
-#         logging.info(f'Статус транзакции с UUID {payment_uuid} обновлён на {status}.')
-#     else:
-#         logging.warning(f'Транзакция с UUID {payment_uuid} не найдена для обновления статуса.')
-#
-#     conn.close()
+# Функция удаления платежа по UUID
+def remove_payment_by_uuid(payment_uuid):
+    rows = list(sheet.iter_rows(min_row=2, values_only=False))
+    for row in rows:
+        if row[0].value == payment_uuid:
+            sheet.delete_rows(row[0].row, 1)
+            logging.info(f"Платеж с UUID {payment_uuid} удален.")
+            return
+    logging.warning(f"Платеж с UUID {payment_uuid} не найден для удаления.")
 
+# Функция редактирования платежей
+def edit_payments(message):
+    current_date = datetime.now().date()
+    date_limit = current_date + timedelta(days=30)
+    payments = []
 
 # Функция редактирования транзакций
 # def edit_payments(message):
@@ -360,18 +357,17 @@ deleted_payments = {}
 #             f'Транзакций за ближайшие 30 дней для редактирования нет. Информация отправлена пользователю {message.chat.id}.')
 
 
-# def get_transaction_by_uuid(uuid):
-#     logging.info(f'Ищем транзакцию с UUID: {uuid}')
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
-#     cursor.execute('SELECT * FROM transactions WHERE uuid = ?', (uuid,))
-#     transaction = cursor.fetchone()
-#     if transaction is None:
-#         logging.warning(f'Транзакция с UUID {uuid} не найдена.')
-#     conn.close()
-#     logging.info(f'Результат поиска: {transaction}')
-#     return transaction
-
+    if payments:
+        bot.send_message(message.chat.id, "Платежи за ближайшие 30 дней для редактирования:")
+        for payment in payments:
+            markup = types.InlineKeyboardMarkup()
+            edit_button = types.InlineKeyboardButton("✏️ Редактировать", callback_data=f"edit_{payment['uuid']}")
+            markup.add(edit_button)
+            bot.send_message(message.chat.id, f"Платеж: {payment['description']}", reply_markup=markup)
+        logging.info(f"Отправлены платежи для редактирования пользователю {message.chat.id}.")
+    else:
+        bot.send_message(message.chat.id, "Нет платежей за ближайшие 30 дней для редактирования.")
+        logging.info(f"Платежей за ближайшие 30 дней для редактирования нет. Информация отправлена пользователю {message.chat.id}.")
 
 # Обработчик callback-запросов (кнопок)
 
