@@ -1,0 +1,8 @@
+pyTelegramBotAPI==4.23.0
+python-dotenv==1.0.1
+openpyxl==3.1.5
+schedule==1.2.2
+django-scheduler==0.10.1
+colorama==0.4.6
+loguru==0.7.2
+python-dateutil==2.9.0.post0
