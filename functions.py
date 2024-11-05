@@ -1,31 +1,19 @@
-import sqlite3
-import time
-import uuid
-import schedule
-import telebot
-import asyncio
-from telebot import types
-from datetime import datetime, timedelta
-import openpyxl
-import sqlite3
-import schedule
-import time
-import threading
-import os
-from dotenv import load_dotenv
 import logging
+import sqlite3
+import time
 import uuid
 from calendar import monthrange
-from dateutil.relativedelta import relativedelta
 from datetime import datetime, timedelta
 
+import schedule
 import telebot
+from dateutil.relativedelta import relativedelta
 from telebot import types
 
+from db_functions import get_db_connection
 # from bot import chat_id
 from logger import logging
-from db_functions import get_db_connection
-from settings import reminder_today_times, reminder_tomorrow_time, db_file
+from settings import reminder_today_times, reminder_tomorrow_time
 
 
 # Функция для отображения платежей на сегодня
@@ -115,7 +103,7 @@ def show_nearest_days(message, days, bot):
         logging.info(f'Транзакций за следующие {days} дней нет. Информация отправлена пользователю {message.chat.id}.')
 
 
-def show_this_month(message, bot):
+def show_this_month(message, bot, chat_id):
     current_date = datetime.now().date()
     start_of_month = current_date.replace(day=1).isoformat()  # Первый день текущего месяца
     end_of_month = (current_date.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
@@ -123,8 +111,8 @@ def show_this_month(message, bot):
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-            SELECT * FROM transactions
+    cursor.execute(f"""
+            SELECT * FROM '{chat_id}'
             WHERE date BETWEEN ? AND ? AND date >= ? AND execution_status = 0
             ORDER BY date ASC, transaction_type = 'снять'
         """, (start_of_month, end_of_month, current_date.isoformat()))

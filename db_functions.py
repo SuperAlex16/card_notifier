@@ -1,6 +1,6 @@
-from logger import logging
 import sqlite3
 
+from logger import logging
 from settings import db_file
 
 
@@ -14,22 +14,41 @@ def get_db_connection():
 # Функция для создания таблицы транзакций
 def init_db(chat_id):
     table_name = chat_id
-    logging.info(f'table_name: {table_name}')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(f"""
-        CREATE TABLE IF NOT EXISTS "{table_name}" (
-            UUID             TEXT              not null
-        primary key,
-    date             TEXT              not null,
-    card_name        TEXT              not null,
-    transaction_type TEXT              not null,
-    amount           REAL              not null,
-    execution_status INTEGER default 0 not null,
-    recurrence_id    TEXT,
-    is_recursive     INTEGER default 0,
-    is_active        INT     default 1 not null
-        )
-    """)
-    conn.commit()
-    conn.close()
+    logging.info(f'Инициализация базы данных для чата: {table_name}...')
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS "{table_name}" (
+                UUID             TEXT              NOT NULL PRIMARY KEY,
+                date             TEXT              NOT NULL,
+                card_name        TEXT              NOT NULL,
+                transaction_type TEXT              NOT NULL,
+                amount           REAL              NOT NULL,
+                execution_status INTEGER DEFAULT 0 NOT NULL,
+                recurrence_id    TEXT,
+                is_recursive     INTEGER DEFAULT 0,
+                is_active        INT DEFAULT 1 NOT NULL
+            )
+        """)
+        conn.commit()
+
+        cursor.execute(f"""
+            SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';
+        """)
+        result = cursor.fetchone()
+
+        if result:
+            logging.info(f'Таблица "{table_name}" существует или была успешно создана')
+        else:
+            logging.warning(f'Таблица "{table_name}" НЕ была создана')
+
+    except Exception as e:
+        logging.error(f'Ошибка при инициализации БД для чата {table_name}: {e}')
+
+    finally:
+        if conn:
+            conn.close()
+            logging.info(f'Соединение с БД закрыто')
