@@ -1,3 +1,5 @@
+### TODO переделать настройки через ini-файл для изменения без перезапуска бота
+
 db_file = 'transactions.db'
 
 ### текст кнопок клавиатур
@@ -19,6 +21,11 @@ nearest_menu_keyboard_text = {
 reminder_period = 1
 
 reminder_today_times = [
-    '10:00', '14:00', '17:00', '20:49'
+    '10:00',
+    '14:00',
+    '17:00',
+    '20:49',
+    '18:58',
+    '19:32'
 ]
 reminder_tomorrow_time = '15:00'

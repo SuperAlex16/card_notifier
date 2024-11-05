@@ -22,15 +22,16 @@ from datetime import datetime, timedelta
 import telebot
 from telebot import types
 
+# from bot import chat_id
 from logger import logging
 from db_functions import get_db_connection
-from settings import reminder_today_times, reminder_tomorrow_time
+from settings import reminder_today_times, reminder_tomorrow_time, db_file
 
 
 # Функция для отображения платежей на сегодня
-def show_today(message, bot):
+def show_today(message, bot, chat_id):
     current_date = datetime.now().date().isoformat()  # Форматируем в 'YYYY-MM-DD'
-    payments_today = get_transactions_by_date(current_date)
+    payments_today = get_transactions_by_date(current_date, chat_id)
 
     if payments_today:
         for payment in payments_today:
@@ -57,6 +58,7 @@ def add_payment(message, bot):
 
 
 def edit_payments(message, bot):
+    ### TODO исправить логику для работы с БД.
     current_date = datetime.now().date()
     date_limit = current_date + timedelta(days=30)
     payments = []
@@ -180,17 +182,18 @@ def ask_for_payment_details(message, bot):
     )
 
 
-def get_transactions_by_date(date):
+def get_transactions_by_date(date, chat_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-                SELECT * FROM transactions
+    cursor.execute(f"""
+                SELECT * FROM "{chat_id}"
                 WHERE date = ? AND execution_status = 0
                 ORDER BY date ASC, transaction_type = 'снять'  -- Сначала 'внести', затем 'снять'
                 """, (date,))
     transactions = cursor.fetchall()
     conn.close()
     return transactions
+
 
 def process_payment_data(message):
     try:
@@ -204,7 +207,7 @@ def process_payment_data(message):
         amount = float(amount_str)
 
         if transaction_type not in ['внести', 'снять']:
-            raise ValueError('Неверный тип транзакции. Используйте внести или снять')
+            raise ValueError("Неверный тип транзакции. Используйте ВНЕСТИ или СНЯТЬ")
 
             payment_uuid = str(uuid.uuid4())  # Генерация UUID для новой транзакции
 
@@ -662,7 +665,7 @@ def send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot
         logging.error(f"Ошибка при отправке напоминания: {e}")
 
 
-def send_reminders():
+def send_reminders(bot, chat_id):
     logging.info('send_reminders запущен')
 
     current_datetime = datetime.now()
@@ -674,8 +677,8 @@ def send_reminders():
     # Подключаемся к базе данных и получаем все невыполненные транзакции
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-                SELECT * FROM transactions
+    cursor.execute(f"""
+                SELECT * FROM '{chat_id}'
                 WHERE execution_status = 0
                 ORDER BY date ASC, transaction_type = 'снять'
                 """)
@@ -701,13 +704,13 @@ def send_reminders():
         if payment_date == current_date and current_time_str in reminder_today_times:
             logging.info(f'текущее время: {current_time_str}, время напоминания: {reminder_today_times}')
             message_text = f"‼️ Братишка, не шути так! Срочно: {amount:,.2f} руб. {transaction_type_lower} по карте {card_name}"
-            send_reminder_with_buttons(payment_uuid, message_text, transaction_type_lower)
+            send_reminder_with_buttons(payment_uuid, message_text, transaction_type_lower, bot, chat_id)
 
         # Проверка условий для отправки напоминания на завтра
         elif (payment_date == (datetime.fromisoformat(current_date) + timedelta(days=1)).isoformat() and
               current_time_str == reminder_tomorrow_time):
             message_text = f"⏰ Не забудь: Завтра {transaction_type_lower} {amount:,.2f} руб. по карте {card_name}"
-            send_reminder_with_buttons(payment_uuid, message_text, transaction_type_lower)
+            send_reminder_with_buttons(payment_uuid, message_text, transaction_type_lower, bot, chat_id)
 
 
 def run_scheduler():
@@ -740,4 +743,3 @@ def safe_polling(bot):
             logging.info("Перезапуск бота через 5 секунд...")
             logging.exception("Трассировка стека исключения:")
             time.sleep(5)
-

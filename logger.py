@@ -4,9 +4,10 @@ from colorama import init
 # Инициализация colorama
 init(autoreset=True)
 
-# Настройка логирования
-logging.add("bot.log", rotation="1 MB")  # Логирование в файл с ротацией
 logging.remove()  # Удаление стандартного обработчика
+# Настройка логирования
+logging.add("bot.log", rotation="1 MB", level="INFO",
+            format="{time:YYYY-MM-DD HH:mm:ss,SSS} | {level: <8} | {module: >10} : {function: <15} - {message}")  # Логирование в файл с ротацией
 
 # Добавление цветного обработчика
 (logging.add(
@@ -15,7 +16,7 @@ logging.remove()  # Удаление стандартного обработчи
     colorize=True,
     format="<green>{time:YYYY-MM-DD HH:mm:ss,SSS}</green> | "
            "<level>{level: <8}</level> | "
-           "<cyan>{module: >10}</cyan> : "
-           "<yellow>{function: <15}</yellow> - "
+           "<cyan>{module: >15}</cyan> : "
+           "<yellow>{function: <20}</yellow> - "
            "<level>{message: <40}</level>"
 ))

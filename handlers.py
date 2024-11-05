@@ -1,27 +1,36 @@
+from db_functions import init_db
+from remind_func import *
 from functions import *
 from keyboards import main_menu_keyboard, nearest_menu_keyboard, start_keyboard
 from logger import logging
 
 
 def register_handlers(bot):
-    @bot.message_handler(func=lambda message: message.text == "Начать")
+    @bot.message_handler(func=lambda message: message.text == "/start")
     def handle_start_button(message):
-        bot.send_message(message.chat.id, "Вы нажали кнопку 'Начать'!")
+        # bot.send_message(message.chat.id, "Вы нажали кнопку 'Начать'!")
         user_chat_id = message.chat.id
+        logging.info(f'id пользователя: {user_chat_id}')
+        init_db(user_chat_id)
+        logging.info('Таблица в БД активирована')
+        run_reminders(bot, user_chat_id)
+        logging.info(f'Запущен run_reminders для чата {user_chat_id}')
         logging.info(f'Пользователь {user_chat_id} запустил бота')
         markup = start_keyboard()
         bot.send_message(message.chat.id, f'Привет, {message.from_user.first_name}', reply_markup=markup)
 
     @bot.message_handler(func=lambda message: True)
     def handle_menu(message):
+        # user_chat_id = message.chat.id
         if message.text == '📅 Что сегодня?':
-            show_today(message, bot)
+            # user_chat_id = message.chat.id
+            show_today(message, bot, message.chat.id)
         elif message.text == "🔜 Ближайшие":
             bot.send_message(message.chat.id, 'Выберите период:', reply_markup=nearest_menu_keyboard())
         elif message.text == '➕ Добавить':
             start_addition_process(message, bot)
         elif message.text == '✏️ Редактировать':
-            edit_payments(message)
+            edit_payments(message, bot)
         elif message.text == '3️⃣ дня':
             show_nearest_days(message, 3, bot)
         elif message.text == '7️⃣ дней':
@@ -33,7 +42,7 @@ def register_handlers(bot):
         elif message.text == '◀️ Назад':
             bot.send_message(message.chat.id, 'Выберите действие:', reply_markup=main_menu_keyboard())
         else:
-            bot.send_message(message.chat.id, 'Пожалуйста, выберите действие из меню.',
+            bot.send_message(message.chat.id, 'Пожалуйста, выберите действие из меню:',
                              reply_markup=main_menu_keyboard())
 
     @bot.callback_query_handler(

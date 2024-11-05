@@ -1,5 +1,4 @@
 import os
-
 import telebot
 import schedule
 import threading
@@ -7,8 +6,7 @@ import time
 
 from dotenv import load_dotenv
 from handlers import register_handlers
-from functions import safe_polling, send_reminders
-from db_functions import init_db
+from functions import send_reminders
 from logger import logging
 from settings import reminder_period
 
@@ -16,41 +14,34 @@ load_dotenv()
 
 # Получение токена и chat_id из переменных окружения
 token = os.getenv('TELEGRAM_BOT_TOKEN')
-chat_id = os.getenv('CHAT_ID')
+# chat_id = os.getenv('CHAT_ID')
 
-if not token or not chat_id:
-    logging.error('Токен или chat_id не установлен в файле .env.')
+if not token:
+    logging.error('Токен не установлен в файле .env.')
     raise ValueError('Необходимые переменные окружения не установлены.')
 
-chat_id = int(chat_id)
 
-init_db()
-
-
-# Функция для запуска планировщика
-def run_scheduler_with_reminders():
-    schedule.every(1).minutes.do(send_reminders)
-    while True:
-        schedule.run_pending()
-        time.sleep(reminder_period)
+# chat_id = int(chat_id)
 
 
-def main():
-    bot = telebot.TeleBot(token)
+def main(bot):
+
     logging.info(f'Создан экземпляр бота: {bot}')
     register_handlers(bot)
 
-    bot_thread = threading.Thread(target=safe_polling, args=(bot,), daemon=True)
-    bot_thread.start()
-    logging.info(f'Бот запущен в thread: {bot_thread.ident}')
-
-    scheduler_thread = threading.Thread(target=run_scheduler_with_reminders, daemon=True)
-    scheduler_thread.start()
-    logging.info(f'Планировщик запущен в thread: {scheduler_thread.ident}')
-
     while True:
-        time.sleep(60)
+        try:
+            logging.info(f"Запущен bot.polling: {bot}")
+            bot.polling(non_stop=True, interval=0, timeout=20)
+        except Exception as e:
+            logging.error(f"Ошибка: {e}")  # Логируем ошибку
+            if isinstance(e, telebot.apihelper.ApiException) and e.error_code == 403:
+                logging.error("Бот был заблокирован пользователем.")
+            logging.info("Перезапуск бота через 5 секунд...")
+            logging.exception("Трассировка стека исключения:")
+            time.sleep(5)
 
 
 if __name__ == '__main__':
-    main()
+    bot = telebot.TeleBot(token)
+    main(bot)

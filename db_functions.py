@@ -1,7 +1,8 @@
+from logger import logging
 import sqlite3
 
-
 from settings import db_file
+
 
 # Функция для подключения к базе данных
 def get_db_connection():
@@ -9,35 +10,25 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row  # Позволяет обращаться к полям результата запроса по именам колонок
     return conn
 
-# Функция для создания таблицы транзакций
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS transactions (
-            uuid TEXT PRIMARY KEY,
-            date TEXT,
-            card_name TEXT,
-            transaction_type TEXT,
-            amount REAL,
-            execution_status INTEGER DEFAULT 0
-        )
-    """)
-    conn.commit()
-    conn.close()
 
-# Функция для создания таблицы удаленных транзакций
-def init_deleted_transactions_table():
+# Функция для создания таблицы транзакций
+def init_db(chat_id):
+    table_name = chat_id
+    logging.info(f'table_name: {table_name}')
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS deleted_transactions (
-            uuid TEXT PRIMARY KEY,
-            date TEXT,
-            card_name TEXT,
-            transaction_type TEXT,
-            amount REAL,
-            execution_status INTEGER
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS "{table_name}" (
+            UUID             TEXT              not null
+        primary key,
+    date             TEXT              not null,
+    card_name        TEXT              not null,
+    transaction_type TEXT              not null,
+    amount           REAL              not null,
+    execution_status INTEGER default 0 not null,
+    recurrence_id    TEXT,
+    is_recursive     INTEGER default 0,
+    is_active        INT     default 1 not null
         )
     """)
     conn.commit()
