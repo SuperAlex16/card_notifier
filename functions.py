@@ -4,6 +4,7 @@ import time
 import uuid
 from calendar import monthrange
 from datetime import datetime, timedelta
+from functools import partial
 
 import schedule
 import telebot
@@ -16,7 +17,7 @@ from logger import logging
 from settings import reminder_today_times, reminder_tomorrow_time
 
 
-# Функция для отображения платежей на сегодня
+# работает
 def show_today(message, bot, chat_id):
     current_date = datetime.now().date().isoformat()  # Форматируем в 'YYYY-MM-DD'
     payments_today = get_transactions_by_date(current_date, chat_id)
@@ -24,7 +25,7 @@ def show_today(message, bot, chat_id):
     if payments_today:
         for payment in payments_today:
             weekday_short = get_weekday_short(datetime.strptime(payment['date'].split()[0], '%Y-%m-%d').date())
-            payment_str = f'{payment['date']} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб.'
+            payment_str = f"{payment['date']} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб."
             markup = types.InlineKeyboardMarkup()
 
             # Кнопки для выполнения, редактирования и удаления
@@ -34,15 +35,15 @@ def show_today(message, bot, chat_id):
             markup.add(done_button, edit_button, delete_button)
 
             bot.send_message(message.chat.id, payment_str, reply_markup=markup)
-        logging.info(f'Отправлены транзакции на сегодня пользователю {message.chat.id}.')
+        logging.info(f"Отправлены транзакции на сегодня пользователю {message.chat.id}.")
     else:
-        bot.send_message(message.chat.id, 'Нет транзакций на сегодня.')
-        logging.info(f'Транзакций на сегодня нет. Информация отправлена пользователю {message.chat.id}.')
+        bot.send_message(message.chat.id, "Нет транзакций на сегодня.")
+        logging.info(f"Транзакций на сегодня нет. Информация отправлена пользователю {message.chat.id}.")
 
 
 def add_payment(message, bot):
     bot.send_message(message.chat.id, 'Введите данные нового платежа (например, дата, сумма и тип):')
-    # Здесь можно добавить код для обработки ввода и сохранения нового платежа в Excel
+    # Здесь можно добавить код для обработки ввода и сохранения нового платежа в БД
 
 
 def edit_payments(message, bot):
@@ -152,20 +153,22 @@ def get_weekday_short(date):
     return weekdays.get(date.weekday(), '')
 
 
-def start_addition_process(message, bot):
-    # Начало процесса добавления транзакции
-    ask_for_payment_details(message, bot)
-    bot.register_next_step_handler(message, process_payment_data)
+# кнопка Добавить
+def start_addition_process(message, bot, chat_id):
+    ask_for_payment_details(message, bot, chat_id)
+    # print(f"message: {message}")
+    bot.register_next_step_handler(message, partial(process_payment_data, bot=bot, chat_id=chat_id))
 
 
-def ask_for_payment_details(message, bot):
+# кнопка Добавить 2
+def ask_for_payment_details(message, bot, chat_id):
     markup = types.InlineKeyboardMarkup()
     cancel_button = types.InlineKeyboardButton('❌ Отменить добавление', callback_data='cancel_addition')
     markup.add(cancel_button)
 
     bot.send_message(
         message.chat.id,
-        'Введите дату (дд.мм.гггг), название карты, внести или снять, сумму (через пробел):',
+        "Введите _дату ГГГГ-ММ-ДД_, название карты, 'внести' или 'снять', сумму (через пробелы):",
         reply_markup=markup
     )
 
@@ -183,59 +186,60 @@ def get_transactions_by_date(date, chat_id):
     return transactions
 
 
-def process_payment_data(message):
+# кнопка Добавить 3
+def process_payment_data(message, bot, chat_id):
     try:
         inputs = message.text.strip().split()
         if len(inputs) != 4:
-            raise ValueError('Неверное количество параметров. Введите: дата карта тип сумма.')
+            raise ValueError("Неверное количество параметров. Введите: дата карта тип сумма")
 
         date_str, card_name, transaction_type_input, amount_str = inputs
-        date = datetime.strptime(date_str, '%d.%m.%Y').date().isoformat()  # Преобразуем в формат 'YYYY-MM-DD'
+        date = datetime.strptime(date_str, '%Y-%m-%d').date().isoformat()  # Преобразуем в формат 'YYYY-MM-DD'
         transaction_type = transaction_type_input.lower()
         amount = float(amount_str)
 
         if transaction_type not in ['внести', 'снять']:
             raise ValueError("Неверный тип транзакции. Используйте ВНЕСТИ или СНЯТЬ")
 
-            payment_uuid = str(uuid.uuid4())  # Генерация UUID для новой транзакции
+        payment_uuid = str(uuid.uuid4())
+        # # Проверка на редактирование: если операция редактирования
+        # if message.chat.id in payment_data and 'edit_uuid' in payment_data[message.chat.id]:
+        #     old_uuid = payment_data[message.chat.id]['edit_uuid']
+        #
+        #     # Удаляем старую транзакцию из базы данных
+        #     delete_transaction(old_uuid, message.chat.id)
+        #     logging.info(f'Удалена старая транзакция с UUID {old_uuid} после редактирования.')
+        #
+        #     # Обновляем данные о редактируемой транзакции
+        #     payment_data[message.chat.id]['edit_uuid'] = payment_uuid  # Обновляем UUID на новый
 
-            # Проверка на редактирование: если операция редактирования
-            if message.chat.id in payment_data and 'edit_uuid' in payment_data[message.chat.id]:
-                old_uuid = payment_data[message.chat.id]['edit_uuid']
+        # Добавление новой транзакции в базу данных
+        add_transaction(payment_uuid, date, card_name, transaction_type, amount, chat_id)
 
-                # Удаляем старую транзакцию из базы данных
-                delete_transaction(old_uuid, message.chat.id)
-                logging.info(f'Удалена старая транзакция с UUID {old_uuid} после редактирования.')
+        # # Сохраняем payment_uuid для последующей работы с повторением
+        # if message.chat.id not in payment_data:
+        #     payment_data[message.chat.id] = {}
+        # payment_data[message.chat.id]['last_payment_uuid'] = payment_uuid
 
-                # Обновляем данные о редактируемой транзакции
-                payment_data[message.chat.id]['edit_uuid'] = payment_uuid  # Обновляем UUID на новый
-
-            # Добавление новой транзакции в базу данных
-            add_transaction(payment_uuid, date, card_name, transaction_type, amount)
-            logging.info(f'Добавлена новая транзакция с UUID {payment_uuid} для пользователя {message.chat.id}.')
-
-            # Сохраняем payment_uuid для последующей работы с повторением
-            if message.chat.id not in payment_data:
-                payment_data[message.chat.id] = {}
-            payment_data[message.chat.id]['last_payment_uuid'] = payment_uuid
-
-            # Спрашиваем пользователя о ежемесячном повторении
-            ask_for_monthly_recurrence(message)
+        ### TODO переписать функцию ask_for_monthly_recurrence для режима повтора; вынести настройки повтора в settings
+        # ask_for_monthly_recurrence(message, bot)
 
     except (ValueError, IndexError) as e:
         bot.send_message(message.chat.id, 'Ошибка. Пожалуйста, проверьте формат ввода.')
         logging.error(f'Ошибка при обработке данных транзакции: {e}')
 
 
-def add_transaction(uuid, date, card_name, transaction_type, amount, execution_status=0):
+# кнопка Добавить 4
+def add_transaction(payment_uuid, date, card_name, transaction_type, amount, chat_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO transactions (uuid, date, card_name, transaction_type, amount, execution_status)
-        VALUES (?, ?, ?, ?, ?, ?)
-                """, (uuid, date, card_name, transaction_type, amount, execution_status))
+    cursor.execute(f"""
+        INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount)
+        VALUES (?, ?, ?, ?, ?)
+                """, (payment_uuid, date, card_name, transaction_type, amount))
     conn.commit()
     conn.close()
+    logging.info(f"Добавлена новая транзакция с UUID {payment_uuid} для пользователя {chat_id}.")
 
 
 def delete_transaction(uuid, chat_id, bot):
@@ -653,6 +657,7 @@ def send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot
         logging.error(f"Ошибка при отправке напоминания: {e}")
 
 
+# работает
 def send_reminders(bot, chat_id):
     logging.info('send_reminders запущен')
 
@@ -668,6 +673,7 @@ def send_reminders(bot, chat_id):
     cursor.execute(f"""
                 SELECT * FROM '{chat_id}'
                 WHERE execution_status = 0
+                AND is_active = 1
                 ORDER BY date ASC, transaction_type = 'снять'
                 """)
     rows = cursor.fetchall()
@@ -716,18 +722,17 @@ def run_scheduler():
             # Ждем до следующего запланированного события
             time.sleep(max(1, next_run))  # Ставим минимум 1 секунду ожидания
 
-
-def safe_polling(bot):
-    logging.info(f"Получен экземпляр бота: {bot}")
-    while True:
-        try:
-            logging.info(f"Пытаемся запустить бота {bot}...")
-            bot.polling(non_stop=True, interval=0, timeout=20)
-            logging.info(f"Запуск бота {bot}")
-        except Exception as e:
-            logging.error(f"Ошибка: {e}, {bot}")  # Логируем ошибку
-            if isinstance(e, telebot.apihelper.ApiException) and e.error_code == 403:
-                logging.error("Бот был заблокирован пользователем.")
-            logging.info("Перезапуск бота через 5 секунд...")
-            logging.exception("Трассировка стека исключения:")
-            time.sleep(5)
+# def safe_polling(bot):
+#     logging.info(f"Получен экземпляр бота: {bot}")
+#     while True:
+#         try:
+#             logging.info(f"Пытаемся запустить бота {bot}...")
+#             bot.polling(non_stop=True, interval=0, timeout=20)
+#             logging.info(f"Запуск бота {bot}")
+#         except Exception as e:
+#             logging.error(f"Ошибка: {e}, {bot}")  # Логируем ошибку
+#             if isinstance(e, telebot.apihelper.ApiException) and e.error_code == 403:
+#                 logging.error("Бот был заблокирован пользователем.")
+#             logging.info("Перезапуск бота через 5 секунд...")
+#             logging.exception("Трассировка стека исключения:")
+#             time.sleep(5)
