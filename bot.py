@@ -1,4 +1,5 @@
 import os
+import sys
 import telebot
 import schedule
 import threading
@@ -12,21 +13,13 @@ from settings import reminder_period
 
 load_dotenv()
 
-# Получение токена и chat_id из переменных окружения
 token = os.getenv('TELEGRAM_BOT_TOKEN')
-# chat_id = os.getenv('CHAT_ID')
 
 if not token:
     logging.error('Токен не установлен в файле .env.')
-    raise ValueError('Необходимые переменные окружения не установлены.')
-
-
-# chat_id = int(chat_id)
-
+    sys.exit("Завершение выполнения: переменные окружения не установлены.")
 
 def main(bot):
-
-    logging.info(f'Создан экземпляр бота: {bot}')
     register_handlers(bot)
 
     while True:
@@ -34,7 +27,7 @@ def main(bot):
             logging.info(f"Запущен bot.polling: {bot}")
             bot.polling(non_stop=True, interval=0, timeout=20)
         except Exception as e:
-            logging.error(f"Ошибка: {e}")  # Логируем ошибку
+            logging.error(f"Ошибка: {e}")
             if isinstance(e, telebot.apihelper.ApiException) and e.error_code == 403:
                 logging.error("Бот был заблокирован пользователем.")
             logging.info("Перезапуск бота через 5 секунд...")
@@ -44,4 +37,5 @@ def main(bot):
 
 if __name__ == '__main__':
     bot = telebot.TeleBot(token)
+    logging.info(f'Создан экземпляр бота: {bot}')
     main(bot)

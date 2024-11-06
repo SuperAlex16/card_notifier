@@ -8,7 +8,6 @@ from settings import reminder_period
 
 
 def run_reminders(bot, chat_id):
-    # Передаем функцию без вызова (без круглых скобок)
     scheduler_thread = threading.Thread(target=run_scheduler_with_reminders, args=(bot, chat_id), daemon=True)
     scheduler_thread.start()
     logging.info(f'Планировщик запущен в thread: {scheduler_thread.ident}')

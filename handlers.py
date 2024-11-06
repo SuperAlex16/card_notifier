@@ -22,13 +22,14 @@ def register_handlers(bot):
     @bot.message_handler(func=lambda message: True)
     def handle_menu(message):
         # user_chat_id = message.chat.id
-        if message.text == '📅 Что сегодня?':
+        if message.text == "📅 Что сегодня?":
             # user_chat_id = message.chat.id
             show_today(message, bot, message.chat.id)
         elif message.text == "🔜 Ближайшие":
-            bot.send_message(message.chat.id, 'Выберите период:', reply_markup=nearest_menu_keyboard())
-        elif message.text == '➕ Добавить':
-            start_addition_process(message, bot)
+            # bot.send_message(message.chat.id, 'Выберите период:', reply_markup=nearest_menu_keyboard())
+            bot.send_message(message.chat.id, "Функция в разработке")
+        elif message.text == "➕ Добавить":
+            start_addition_process(message, bot, message.chat.id)
         elif message.text == '✏️ Редактировать':
             edit_payments(message, bot)
         elif message.text == '3️⃣ дня':
