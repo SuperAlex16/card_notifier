@@ -27,3 +27,5 @@ reminder_today_times = [
     "23:09"
 ]
 reminder_tomorrow_time = "15:00"
+
+reccurent_count_months = 36
