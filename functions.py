@@ -222,7 +222,7 @@ def process_payment_data(message, bot, chat_id):
         # payment_data[message.chat.id]['last_payment_uuid'] = payment_uuid
 
         ### TODO переписать функцию ask_for_monthly_recurrence для режима повтора; вынести настройки повтора в settings
-        # ask_for_monthly_recurrence(message, bot)
+        ask_for_monthly_recurrence(payment_uuid, message, bot)
 
     except (ValueError, IndexError) as e:
         bot.send_message(message.chat.id, 'Ошибка. Пожалуйста, проверьте формат ввода.')
@@ -267,11 +267,11 @@ def delete_transaction(uuid, chat_id, bot):
     else:
         delete_one_transaction(uuid)  # Удаляем только одну транзакцию, если она не рекурсивная
 
-
-def ask_for_monthly_recurrence(message, bot):
+# кнопка Добавить 5
+def ask_for_monthly_recurrence(payment_uuid, message, bot):
     markup = types.InlineKeyboardMarkup()
-    yes_button = types.InlineKeyboardButton("Да", callback_data="recurrence_yes")
-    no_button = types.InlineKeyboardButton("Нет", callback_data="recurrence_no")
+    yes_button = types.InlineKeyboardButton("Да", callback_data=f"[recurrence_yes]_[{payment_uuid}]")
+    no_button = types.InlineKeyboardButton("Нет", callback_data=f"[recurrence_no]_[{payment_uuid}]")
     markup.add(yes_button, no_button)
 
     bot.send_message(message.chat.id, "Повторять ежемесячно?", reply_markup=markup)
@@ -399,12 +399,12 @@ def get_transactions_in_date_range(start_date, end_date):
     return transactions
 
 
-def create_recurring_payments(payment_uuid, months):
+def create_recurring_payments(payment_uuid, months, chat_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     # Получаем исходную транзакцию и создаем уникальный recurrence_id для всей группы повторов
-    cursor.execute("SELECT date, card_name, transaction_type, amount FROM transactions WHERE uuid = ?",
+    cursor.execute(f"""SELECT date, card_name, transaction_type, amount FROM '{chat_id}' WHERE uuid = ?""",
                    (payment_uuid,))
     original_payment = cursor.fetchone()
     recurrence_id = str(uuid.uuid4())  # Уникальный идентификатор для группы повторов
@@ -416,8 +416,8 @@ def create_recurring_payments(payment_uuid, months):
         amount = original_payment['amount']
 
         # Обновляем исходную транзакцию, устанавливая is_recursive и recurrence_id
-        cursor.execute("""
-                UPDATE transactions
+        cursor.execute(f"""
+                UPDATE '{chat_id}'
                 SET recurrence_id = ?, is_recursive = 1
                 WHERE uuid = ?
                 """, (recurrence_id, payment_uuid))
@@ -431,8 +431,8 @@ def create_recurring_payments(payment_uuid, months):
                 next_date = next_date.replace(day=last_day_of_month)
 
             new_payment_uuid = str(uuid.uuid4())
-            cursor.execute("""
-        INSERT INTO transactions (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
+            cursor.execute(f"""
+        INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
         VALUES (?, ?, ?, ?, ?, 0, ?, 1)
     """, (new_payment_uuid, next_date.isoformat(), card_name, transaction_type, amount, recurrence_id))
 
