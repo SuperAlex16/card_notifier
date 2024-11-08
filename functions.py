@@ -83,7 +83,7 @@ def edit_payments(message, bot):
 def show_nearest_days(message, days, bot):
     current_date = datetime.now().date()
     date_limit = (current_date + timedelta(days=days)).isoformat()
-    payments = get_transactions_in_date_range(current_date.isoformat(), date_limit)
+    payments = get_transactions_in_date_range(current_date.isoformat(), date_limit, message)
 
     if payments:
         for payment in payments:
@@ -247,7 +247,7 @@ def delete_transaction(uuid, chat_id, bot):
     cursor = conn.cursor()
 
     # Проверяем, является ли транзакция рекурсивной
-    cursor.execute('SELECT recurrence_id, is_recursive FROM transactions WHERE uuid = ?', (uuid,))
+    cursor.execute(f"""SELECT recurrence_id, is_recursive FROM '{chat_id}' WHERE uuid = ?""", (uuid,))
     transaction = cursor.fetchone()
     conn.close()
 
@@ -265,7 +265,8 @@ def delete_transaction(uuid, chat_id, bot):
         bot.send_message(chat_id, "Эта транзакция является частью серии. Хотите удалить только её или всю серию?",
                          reply_markup=markup)
     else:
-        delete_one_transaction(uuid)  # Удаляем только одну транзакцию, если она не рекурсивная
+        delete_one_transaction(uuid, chat_id)  # Удаляем только одну транзакцию, если она не рекурсивная
+
 
 # кнопка Добавить 5
 def ask_for_monthly_recurrence(payment_uuid, message, bot):
@@ -277,7 +278,7 @@ def ask_for_monthly_recurrence(payment_uuid, message, bot):
     bot.send_message(message.chat.id, "Повторять ежемесячно?", reply_markup=markup)
 
 
-def update_transaction_status(uuid, status):
+def update_transaction_status(uuid, status, chat_id):
     """
     Функция обновляет статус выполнения транзакции в таблице transactions.
 
@@ -294,8 +295,8 @@ def update_transaction_status(uuid, status):
     logging.info(f"Попытка обновить статус транзакции UUID {uuid} на статус {status}")
 
     # Выполняем обновление статуса транзакции
-    cursor.execute("""
-                UPDATE transactions
+    cursor.execute(f"""
+                UPDATE '{chat_id}'
                 SET execution_status = ?
                 WHERE UUID = ?
                 """, (status, uuid))
@@ -312,85 +313,86 @@ def update_transaction_status(uuid, status):
     logging.info(f"Проверка после commit: UUID {uuid}, новый статус: {status}")
 
 
-def delete_one_transaction(uuid):
+def delete_one_transaction(uuid, chat_id):
     logging.info(f"Функция delete_one_transaction вызвана для UUID: {uuid}")
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-                INSERT INTO deleted_transactions (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
+    cursor.execute(f"""
+                INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
                 SELECT uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive
                 FROM transactions
                 WHERE uuid = ?
                 """, (uuid,))
 
-    cursor.execute('DELETE FROM transactions WHERE uuid = ?', (uuid,))
+    cursor.execute(f"""DELETE FROM '{chat_id}' WHERE uuid = ?""", (uuid,))
     conn.commit()
     logging.info(f"Только транзакция с UUID {uuid} удалена.")
     conn.close()
 
 
-def delete_series(recurrence_id):
-    logging.info(f"Функция delete_series вызвана для recurrence_id: {recurrence_id}")
-    conn = get_db_connection()
-    cursor = conn.cursor()
+# def delete_series(recurrence_id):
+#     logging.info(f"Функция delete_series вызвана для recurrence_id: {recurrence_id}")
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+#
+#     cursor.execute("""
+#                 INSERT INTO deleted_transactions (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
+#                 SELECT uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive
+#                 FROM transactions
+#                 WHERE recurrence_id = ?
+#                 """, (recurrence_id,))
+#
+#     cursor.execute('DELETE FROM transactions WHERE recurrence_id = ?', (recurrence_id,))
+#     conn.commit()
+#     logging.info(f"Все транзакции с recurrence_id {recurrence_id} удалены.")
+#     conn.close()
 
-    cursor.execute("""
-                INSERT INTO deleted_transactions (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
-                SELECT uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive
-                FROM transactions
-                WHERE recurrence_id = ?
-                """, (recurrence_id,))
 
-    cursor.execute('DELETE FROM transactions WHERE recurrence_id = ?', (recurrence_id,))
-    conn.commit()
-    logging.info(f"Все транзакции с recurrence_id {recurrence_id} удалены.")
-    conn.close()
-
-
-def restore_transaction(uuid=None, recurrence_id=None):
+def restore_transaction(chat_id, uuid=None, recurrence_id=None):
     conn = get_db_connection()
     cursor = conn.cursor()
 
     if recurrence_id:
         # Логируем количество транзакций, которые будут восстановлены
-        cursor.execute('SELECT COUNT(*) FROM deleted_transactions WHERE recurrence_id = ?', (recurrence_id,))
+        cursor.execute(f"""SELECT COUNT(*) FROM '{chat_id}' WHERE recurrence_id = ?""", (recurrence_id,))
         count = cursor.fetchone()[0]
         logging.info(f"Найдено для восстановления по recurrence_id {recurrence_id}: {count} транзакций")
 
         # Восстанавливаем всю серию по recurrence_id
-        cursor.execute("""
-                INSERT INTO transactions (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
+        cursor.execute(f"""
+                INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
                 SELECT uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive
                 FROM deleted_transactions
                 WHERE recurrence_id = ?
                 """, (recurrence_id,))
 
         # Удаляем восстановленные транзакции из deleted_transactions
-        cursor.execute('DELETE FROM deleted_transactions WHERE recurrence_id = ?', (recurrence_id,))
+        cursor.execute(f"""DELETE FROM '{chat_id}' WHERE recurrence_id = ?""", (recurrence_id,))
         logging.info(f"Восстановлены все транзакции с recurrence_id {recurrence_id}.")
 
     elif uuid:
         # Восстанавливаем только одну транзакцию по её UUID
-        cursor.execute("""
-                INSERT INTO transactions (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
+        cursor.execute(f"""
+                INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
                 SELECT uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive
                 FROM deleted_transactions
                 WHERE uuid = ?
                 """, (uuid,))
 
-        cursor.execute('DELETE FROM deleted_transactions WHERE uuid = ?', (uuid,))
+        cursor.execute(f"""DELETE FROM '{chat_id}' WHERE uuid = ?""", (uuid,))
         logging.info(f"Восстановлена транзакция с UUID {uuid}.")
 
     conn.commit()
     conn.close()
 
 
-def get_transactions_in_date_range(start_date, end_date):
+def get_transactions_in_date_range(start_date, end_date, message):
+    chat_id = message.chat.id
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-                SELECT * FROM transactions
+    cursor.execute(f"""
+                SELECT * FROM '{chat_id}'
                 WHERE date BETWEEN ? AND ? AND execution_status = 0
                 ORDER BY date ASC, transaction_type = 'снять'
                 """, (start_date, end_date))
@@ -399,6 +401,7 @@ def get_transactions_in_date_range(start_date, end_date):
     return transactions
 
 
+# работает
 def create_recurring_payments(payment_uuid, months, chat_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -445,29 +448,29 @@ def create_recurring_payments(payment_uuid, months, chat_id):
     conn.close()
 
 
-def update_payment_status(payment_uuid, status):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-                UPDATE transactions
-                SET execution_status = ?
-                WHERE uuid = ?
-                """, (status, payment_uuid))
+# def update_payment_status(payment_uuid, status):
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+#     cursor.execute("""
+#                 UPDATE transactions
+#                 SET execution_status = ?
+#                 WHERE uuid = ?
+#                 """, (status, payment_uuid))
+#
+#     if cursor.rowcount > 0:
+#         conn.commit()
+#         logging.info(f"Статус транзакции с UUID {payment_uuid} обновлён на {status}.")
+#     else:
+#         logging.warning(f"Транзакция с UUID {payment_uuid} не найдена для обновления статуса.")
+#
+#     conn.close()
 
-    if cursor.rowcount > 0:
-        conn.commit()
-        logging.info(f"Статус транзакции с UUID {payment_uuid} обновлён на {status}.")
-    else:
-        logging.warning(f"Транзакция с UUID {payment_uuid} не найдена для обновления статуса.")
 
-    conn.close()
-
-
-def get_transaction_by_uuid(uuid):
+def get_transaction_by_uuid(uuid, chat_id):
     logging.info(f"Ищем транзакцию с UUID: {uuid}")
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM transactions WHERE uuid = ?', (uuid,))
+    cursor.execute(f"""SELECT * FROM '{chat_id}' WHERE uuid = ?""", (uuid,))
     transaction = cursor.fetchone()
     if transaction is None:
         logging.warning(f"Транзакция с UUID {uuid} не найдена.")
@@ -476,17 +479,13 @@ def get_transaction_by_uuid(uuid):
     return transaction
 
 
-def process_edit_payment(message, bot):
+def process_edit_payment(message, bot, payment_uuid):
     try:
-        if message.chat.id not in payment_data or 'edit_uuid' not in payment_data[message.chat.id]:
-            bot.send_message(message.chat.id, "Ошибка: транзакция для редактирования не найдена.")
-            return
-
-        payment_uuid = payment_data[message.chat.id]['edit_uuid']
+        chat_id = message.chat.id
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT recurrence_id, is_recursive FROM transactions WHERE uuid = ?", (payment_uuid,))
+        cursor.execute(f"""SELECT recurrence_id, is_recursive FROM '{chat_id}' WHERE uuid = ?""", (payment_uuid,))
         transaction = cursor.fetchone()
         conn.close()
 
@@ -505,14 +504,14 @@ def process_edit_payment(message, bot):
                              reply_markup=markup)
         else:
             bot.send_message(message.chat.id, "Введите новые данные в формате: дата карта тип сумма.")
-            bot.register_next_step_handler(message, edit_transaction_data, payment_uuid)
+            bot.register_next_step_handler(message, edit_transaction_data, bot=bot, payment_uuid=payment_uuid)
 
     except Exception as e:
         bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
         logging.error(f"Ошибка при редактировании транзакции: {str(e)}")
 
 
-def find_transaction(uuid):
+def find_transaction(uuid, chat_id):
     original_uuid = uuid
     if uuid.startswith("edit_one_"):
         uuid = uuid.replace("edit_one_", "")
@@ -522,7 +521,7 @@ def find_transaction(uuid):
     logging.info(f"Ищем транзакцию с UUID (исходный: {original_uuid}, без префикса: {uuid})")
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM transactions WHERE uuid = ?", (uuid,))
+    cursor.execute(f"""SELECT * FROM '{chat_id}' WHERE uuid = ?""", (uuid,))
     transaction = cursor.fetchone()
     conn.close()
 
@@ -536,6 +535,7 @@ def find_transaction(uuid):
 
 def edit_transaction_data(message, payment_uuid, bot):
     logging.info(f"Функция edit_transaction_data вызвана для UUID: {payment_uuid}")
+    chat_id = message.chat.id
     try:
         # Получаем и разбираем введённые данные
         inputs = message.text.strip().split()
@@ -544,7 +544,7 @@ def edit_transaction_data(message, payment_uuid, bot):
             return
 
         date_str, card_name, transaction_type_input, amount_str = inputs
-        date = datetime.strptime(date_str, "%d.%m.%Y").date()
+        date = datetime.strptime(date_str, "%Y-%m-%d").date()
         transaction_type = transaction_type_input.lower()
         amount = float(amount_str)
 
@@ -554,8 +554,8 @@ def edit_transaction_data(message, payment_uuid, bot):
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-                UPDATE transactions
+        cursor.execute(f"""
+                UPDATE '{chat_id}'
                 SET date = ?, card_name = ?, transaction_type = ?, amount = ?
                 WHERE uuid = ?
                 """, (date, card_name, transaction_type, amount, payment_uuid))
@@ -569,7 +569,7 @@ def edit_transaction_data(message, payment_uuid, bot):
         logging.error(f"Ошибка при редактировании транзакции: {str(e)}")
 
 
-def edit_series_data(message, recurrence_id, bot):
+def edit_series_data(message, recurrence_id, bot, chat_id):
     logging.info(f"Функция edit_series_data вызвана для recurrence_id: {recurrence_id}")
     try:
         inputs = message.text.strip().split()
@@ -588,8 +588,8 @@ def edit_series_data(message, recurrence_id, bot):
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-                UPDATE transactions
+        cursor.execute(f"""
+                UPDATE '{chat_id}'
                 SET date = ?, card_name = ?, transaction_type = ?, amount = ?
                 WHERE recurrence_id = ? AND date >= ?
                 """, (date, card_name, transaction_type, amount, recurrence_id, datetime.now().date().isoformat()))
@@ -603,11 +603,11 @@ def edit_series_data(message, recurrence_id, bot):
         logging.error(f"Ошибка при редактировании серии транзакций: {str(e)}")
 
 
-def update_transaction_status(uuid, status):
+def update_transaction_status(uuid, status, chat_id):
     conn = sqlite3.connect('transactions.db')
     cursor = conn.cursor()
-    cursor.execute("""
-                UPDATE transactions
+    cursor.execute(f"""
+                UPDATE '{chat_id}'
                 SET execution_status = ?
                 WHERE UUID = ?
                 """, (status, uuid))

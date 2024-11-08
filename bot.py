@@ -1,15 +1,11 @@
 import os
 import sys
 import telebot
-import schedule
-import threading
 import time
 
 from dotenv import load_dotenv
 from handlers import register_handlers
-from functions import send_reminders
 from logger import logging
-from settings import reminder_period
 
 load_dotenv()
 
@@ -18,6 +14,7 @@ token = os.getenv('TELEGRAM_BOT_TOKEN')
 if not token:
     logging.error('Токен не установлен в файле .env.')
     sys.exit("Завершение выполнения: переменные окружения не установлены.")
+
 
 def main(bot):
     register_handlers(bot)
