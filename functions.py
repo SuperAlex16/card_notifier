@@ -21,7 +21,7 @@ from settings import reminder_today_times, reminder_tomorrow_time
 def show_today(message, bot, chat_id):
     current_date = datetime.now().date().isoformat()  # Форматируем в 'YYYY-MM-DD'
     payments_today = get_transactions_by_date(current_date, chat_id)
-
+    ### TODO пофиксить функцию восстановления при удалении
     if payments_today:
         for payment in payments_today:
             weekday_short = get_weekday_short(datetime.strptime(payment['date'].split()[0], '%Y-%m-%d').date())
@@ -318,14 +318,15 @@ def delete_one_transaction(uuid, chat_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(f"""
-                INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
-                SELECT uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive
-                FROM transactions
-                WHERE uuid = ?
-                """, (uuid,))
+    # cursor.execute(f"""
+    #             INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive)
+    #             SELECT uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id, is_recursive
+    #             FROM '{chat_id}'
+    #             WHERE uuid = ?
+    #             """, (uuid,))
 
-    cursor.execute(f"""DELETE FROM '{chat_id}' WHERE uuid = ?""", (uuid,))
+    # cursor.execute(f"""DELETE FROM '{chat_id}' WHERE uuid = ?""", (uuid,))
+    cursor.execute(f"""UPDATE '{chat_id}' SET is_active = 0 WHERE uuid = ?""", (uuid,))
     conn.commit()
     logging.info(f"Только транзакция с UUID {uuid} удалена.")
     conn.close()

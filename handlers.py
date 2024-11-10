@@ -231,7 +231,7 @@ def register_handlers(bot):
             payment_uuid = call.data.replace("confirm_delete_", "")
 
             # Удаление транзакции
-            delete_transaction(payment_uuid, call.message.chat.id)
+            delete_transaction(payment_uuid, call.message.chat.id, bot)
 
             # Добавляем кнопку для отмены удаления
             markup = types.InlineKeyboardMarkup()
