@@ -4,23 +4,26 @@ from logger import logging
 from settings import db_file
 
 
-# Функция для подключения к базе данных
 def get_db_connection():
-    conn = sqlite3.connect(db_file)  # Открывает или создает файл базы данных 'transactions.db'
-    conn.row_factory = sqlite3.Row  # Позволяет обращаться к полям результата запроса по именам колонок
-    return conn
+	logging.info(f"Connecting to db: {db_file}...")
+	try:
+		conn = sqlite3.connect(db_file)
+		conn.row_factory = sqlite3.Row
+		logging.info(f"Connected to db: {db_file}")
+		return conn
+	except sqlite3.Error as e:
+		logging.error(f"Failed to connect to db: {db_file}")
 
 
-# Функция для создания таблицы транзакций
 def init_db(chat_id):
-    table_name = chat_id
-    logging.info(f'Инициализация базы данных для чата: {table_name}...')
+	table_name = chat_id
+	logging.info(f"Creating a table for chat_id: {table_name}...")
 
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+	try:
+		conn = get_db_connection()
+		cursor = conn.cursor()
 
-        cursor.execute(f"""
+		cursor.execute(f"""
             CREATE TABLE IF NOT EXISTS "{table_name}" (
                 UUID             TEXT              NOT NULL PRIMARY KEY,
                 date             TEXT              NOT NULL,
@@ -33,22 +36,22 @@ def init_db(chat_id):
                 is_active        INT DEFAULT 1 NOT NULL
             )
         """)
-        conn.commit()
+		conn.commit()
 
-        cursor.execute(f"""
+		cursor.execute(f"""
             SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}';
         """)
-        result = cursor.fetchone()
+		result = cursor.fetchone()
 
-        if result:
-            logging.info(f'Таблица "{table_name}" существует или была успешно создана')
-        else:
-            logging.warning(f'Таблица "{table_name}" НЕ была создана')
+		if result:
+			logging.info(f"Table {table_name} exists or was created successfully")
+		else:
+			logging.warning(f"Table {table_name} was NOT created")
 
-    except Exception as e:
-        logging.error(f'Ошибка при инициализации БД для чата {table_name}: {e}')
+	except Exception as e:
+		logging.error(f"Error while opening a table {table_name}: {e}")
 
-    finally:
-        if conn:
-            conn.close()
-            logging.info(f'Соединение с БД закрыто')
+	finally:
+		if conn:
+			conn.close()
+			logging.info(f'Connection closed for chat_id: {table_name}')
