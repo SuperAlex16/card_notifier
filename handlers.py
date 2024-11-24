@@ -73,7 +73,7 @@ def register_handlers(bot):
         # done
         if call.data.startswith('done_'):
             payment_uuid = call.data.replace('done_', '')
-            done_transactions(chat_id, bot, payment_uuid)
+            done_transactions(chat_id, payment_uuid)
 
             markup = types.InlineKeyboardMarkup()
             undo_button = types.InlineKeyboardButton('❌ Отменить', callback_data=f'undo_done_{payment_uuid}')

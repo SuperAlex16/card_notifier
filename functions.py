@@ -298,7 +298,7 @@ def undo_delete_transactions(chat_id, payment_id=None, recurrence_id=None, ):
         conn.close()
 
 
-def done_transactions(chat_id, payment_id=None, recurrence_id=None, ):
+def done_transactions(chat_id, payment_uuid=None, recurrence_id=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -312,13 +312,13 @@ def done_transactions(chat_id, payment_id=None, recurrence_id=None, ):
                 )
             conn.commit()
 
-        elif payment_id:
+        elif payment_uuid:
             cursor.execute(
                 f"""
                             UPDATE '{chat_id}' 
                             SET execution_status = 1, is_active = 0 
                             WHERE UUID = ?
-                            """, (payment_id,)
+                            """, (payment_uuid,)
                 )
             conn.commit()
     except Exception as e:
@@ -327,7 +327,7 @@ def done_transactions(chat_id, payment_id=None, recurrence_id=None, ):
         conn.close()
 
 
-def undo_transactions(chat_id, payment_id=None, recurrence_id=None):
+def undo_transactions(chat_id, payment_uuid=None, recurrence_id=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -341,13 +341,13 @@ def undo_transactions(chat_id, payment_id=None, recurrence_id=None):
                 )
             conn.commit()
 
-        elif payment_id:
+        elif payment_uuid:
             cursor.execute(
                 f"""
                             UPDATE '{chat_id}' 
                             SET execution_status = 0, is_active = 1
                             WHERE UUID = ?
-                            """, (payment_id,)
+                            """, (payment_uuid,)
                 )
             conn.commit()
     except Exception as e:
