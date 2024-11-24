@@ -12,7 +12,7 @@ def run_reminders(bot, chat_id):
     scheduler_thread.start()
     logging.info(f'Планировщик запущен в thread: {scheduler_thread.ident}')
 
-# Функция для запуска планировщика
+
 def run_scheduler_with_reminders(bot, chat_id):
     schedule.every(1).minutes.do(lambda: send_reminders(bot, chat_id))
     while True:
