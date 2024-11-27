@@ -14,6 +14,7 @@ def run_reminders(bot, chat_id):
 
 
 def run_scheduler_with_reminders(bot, chat_id):
+    send_reminders(bot, chat_id)
     schedule.every(1).minutes.do(lambda: send_reminders(bot, chat_id))
     while True:
         schedule.run_pending()

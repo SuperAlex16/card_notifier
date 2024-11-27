@@ -9,11 +9,17 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from functools import partial
 from telebot import types
+from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
 
 from db_functions import get_db_connection
+from keyboards import create_calendar, cards_list_keyboard, recurrence_type_keyboard, \
+    transactions_type_keyboard, undo_save_transactions_to_db_keyboard
 from keyboards import transaction_info_keyboard
 from logger import logging
-from settings import reminder_today_times, reminder_tomorrow_time, db_transaction_types
+from settings import recurrent_count_months, reminder_today_times, reminder_tomorrow_time, \
+    db_transaction_types
+
+transaction_dict = {}
 
 
 # работает
@@ -27,7 +33,7 @@ def show_today(message, bot, chat_id):
                 datetime.strptime(
                     payment['date'].split()[0], '%Y-%m-%d'
                 ).date()
-                )
+            )
             payment_str = f"{payment['date']} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб."
             payment_uuid = payment['uuid']
 
@@ -84,7 +90,7 @@ def show_nearest_days(message, days, bot):
                 datetime.strptime(
                     payment['date'].split()[0], '%Y-%m-%d'
                 ).date()
-                )
+            )
             payment_str = f'{payment['date']} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб.'
             markup = types.InlineKeyboardMarkup()
 
@@ -100,7 +106,7 @@ def show_nearest_days(message, days, bot):
         bot.send_message(message.chat.id, f'Нет транзакций за следующие {days} дней.')
         logging.info(
             f'Транзакций за следующие {days} дней нет. Информация отправлена пользователю {message.chat.id}.'
-            )
+        )
 
 
 def show_this_month(message, bot, chat_id):
@@ -117,7 +123,7 @@ def show_this_month(message, bot, chat_id):
             WHERE date BETWEEN ? AND ? AND date >= ? AND execution_status = 0
             ORDER BY date, transaction_type = 'снять'
         """, (start_of_month, end_of_month, current_date.isoformat())
-        )
+    )
     transactions = cursor.fetchall()
     conn.close()
 
@@ -139,7 +145,7 @@ def show_this_month(message, bot, chat_id):
         bot.send_message(message.chat.id, 'Нет предстоящих транзакций на текущий месяц.')
         logging.info(
             f'Предстоящих транзакций на текущий месяц нет. Информация отправлена пользователю {message.chat.id}.'
-            )
+        )
 
 
 def get_weekday_short(date):
@@ -155,23 +161,126 @@ def get_weekday_short(date):
     return weekdays.get(date.weekday(), '')
 
 
-# кнопка Добавить
-def start_addition_process(message, bot, chat_id):
-    ask_for_payment_details(bot, chat_id)
-    bot.register_next_step_handler(message, partial(process_payment_data, bot=bot, chat_id=chat_id))
+def create_transactions_dict(chat_id, key, value):
+    if chat_id not in transaction_dict:
+        transaction_dict[chat_id] = {}
+
+    transaction_dict[chat_id][key] = value  # print(f"Словарь: {transaction_dict}")
 
 
-# кнопка Добавить 2
-def ask_for_payment_details(bot, chat_id):
+def create_uuid():
+    result = str(uuid.uuid4())
+    return result
+
+
+# add transaction
+def start_addition_process(bot, chat_id):
     markup = types.InlineKeyboardMarkup()
-    cancel_button = types.InlineKeyboardButton("❌ Отменить добавление", callback_data="cancel_addition")
+    cancel_button = types.InlineKeyboardButton("❌ Отменить", callback_data="cancel_addition")
     markup.add(cancel_button)
+    ask_for_transaction_date(bot, chat_id)
 
-    bot.send_message(
-        chat_id,
-        "Введите дату ГГГГ-ММ-ДД, название карты, 'внести' или 'снять', сумму (через пробелы):",
-        reply_markup=markup
+    bot.send_message(chat_id, "Вы можете отменить добавление", reply_markup=markup)
+
+
+def ask_for_transaction_date(bot, chat_id):
+    markup = create_calendar()
+    bot.send_message(chat_id, "Выберите дату:", reply_markup=markup)
+
+
+def ask_for_card_name(bot, chat_id):
+    markup = cards_list_keyboard(chat_id)
+    bot.send_message(chat_id, "Выберите карту из списка или добавьте новую:", reply_markup=markup)
+
+
+def ask_for_transaction_type(bot, chat_id):
+    markup = transactions_type_keyboard()
+    bot.send_message(chat_id, "Выберите действие:", reply_markup=markup)
+
+
+def ask_for_amount(bot, chat_id):
+    bot.send_message(chat_id, "Введите сумму:")
+
+
+def ask_for_monthly_recurrence(bot, chat_id):
+    markup = recurrence_type_keyboard()
+    bot.send_message(chat_id, "Повторять ежемесячно?", reply_markup=markup)
+
+
+def save_transactions_to_db(bot, chat_id, payment_uuid):
+    data = transaction_dict
+
+    table_name = chat_id
+
+    date_obj = datetime(
+        year=data[chat_id]['date']['year'],
+        month=data[chat_id]['date']['month'],
+        day=data[chat_id]['date']['day']
+    )
+    date = date_obj.date().isoformat()
+
+    card_name = data[chat_id]['card']
+    transaction_type = data[chat_id]['type']
+    amount = data[chat_id]['amount']
+    recurrence_id = data[chat_id]['recurrence_id']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        if recurrence_id is None:
+            cursor.execute(
+                f"""
+                INSERT INTO '{table_name}' (uuid, date, card_name, transaction_type, amount, execution_status,
+                recurrence_id, is_active)
+                VALUES (?, ?, ?, ?, ?, 0, ?, 1)
+                """, (payment_uuid, date, card_name, transaction_type, amount, recurrence_id)
+            )
+            logging.info(f"Single transaction {payment_uuid} was saved")
+        else:
+            # Множественные транзакции (рекуррентные)
+            recurrenced_date = date_obj
+            for _ in range(recurrent_count_months):
+                payment_uuid = create_uuid()
+                cursor.execute(
+                    f"""
+                    INSERT INTO '{table_name}' (uuid, date, card_name, transaction_type, amount, execution_status,
+                    recurrence_id, is_active)
+                    VALUES (?, ?, ?, ?, ?, 0, ?, 1)
+                    """,
+                    (payment_uuid, recurrenced_date.date().isoformat(), card_name, transaction_type, amount,
+                     recurrence_id)
+                )
+
+                recurrenced_date += relativedelta(months=1)
+            logging.info(
+                f"Recurrent transactions with {recurrence_id} were saved"
+            )
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error saving transactions: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+
+def undo_save_transactions_to_db(chat_id, action_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    table_name = chat_id
+    try:
+        cursor.execute(
+            f"""DELETE FROM "{table_name}"
+            WHERE "UUID" = ? OR "recurrence_id" = ?
+        """, (action_id, action_id)
         )
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error undoing transactions: {e}")
+    finally:
+        conn.close()
 
 
 def get_transactions_by_date(date, chat_id):
@@ -193,14 +302,13 @@ def get_transactions_by_date(date, chat_id):
             WHEN transaction_type = ? THEN 2
         END
         """, (date, transaction_type_1, transaction_type_2)
-        )
+    )
 
     transactions = cursor.fetchall()
     conn.close()
     return transactions
 
 
-# кнопка Добавить 3
 def process_payment_data(message, bot, chat_id):
     try:
         inputs = message.text.strip().split()
@@ -225,7 +333,6 @@ def process_payment_data(message, bot, chat_id):
         logging.error(f'Ошибка при обработке данных транзакции: {e}')
 
 
-# кнопка Добавить 4
 def add_transaction(payment_uuid, date, card_name, transaction_type, amount, chat_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -234,7 +341,7 @@ def add_transaction(payment_uuid, date, card_name, transaction_type, amount, cha
         INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount)
         VALUES (?, ?, ?, ?, ?)
                 """, (payment_uuid, date, card_name, transaction_type, amount)
-        )
+    )
     conn.commit()
     conn.close()
     logging.info(f"Добавлена новая транзакция с UUID {payment_uuid} для пользователя {chat_id}.")
@@ -251,7 +358,7 @@ def delete_transactions(chat_id, payment_id=None, recurrence_id=None):
                         SET is_active = 0 
                         WHERE recurrence_id = ?
                         """, (recurrence_id,)
-                )
+            )
             conn.commit()
 
         elif payment_id:
@@ -261,7 +368,7 @@ def delete_transactions(chat_id, payment_id=None, recurrence_id=None):
                         SET is_active = 0 
                         WHERE UUID = ?
                         """, (payment_id,)
-                )
+            )
             conn.commit()
     except Exception as e:
         logging.error(f"{e}")
@@ -280,7 +387,7 @@ def undo_delete_transactions(chat_id, payment_id=None, recurrence_id=None, ):
                         SET is_active = 1 
                         WHERE recurrence_id = ?
                         """, (recurrence_id,)
-                )
+            )
             conn.commit()
 
         elif payment_id:
@@ -290,7 +397,7 @@ def undo_delete_transactions(chat_id, payment_id=None, recurrence_id=None, ):
                         SET is_active = 1 
                         WHERE UUID = ?
                         """, (payment_id,)
-                )
+            )
             conn.commit()
     except Exception as e:
         logging.error(f"{e}")
@@ -309,7 +416,7 @@ def done_transactions(chat_id, payment_uuid=None, recurrence_id=None):
                             SET execution_status = 1, is_active = 0
                             WHERE recurrence_id = ?
                             """, (recurrence_id,)
-                )
+            )
             conn.commit()
 
         elif payment_uuid:
@@ -319,7 +426,7 @@ def done_transactions(chat_id, payment_uuid=None, recurrence_id=None):
                             SET execution_status = 1, is_active = 0 
                             WHERE UUID = ?
                             """, (payment_uuid,)
-                )
+            )
             conn.commit()
     except Exception as e:
         logging.error(f"{e}")
@@ -338,7 +445,7 @@ def undo_transactions(chat_id, payment_uuid=None, recurrence_id=None):
                             SET execution_status = 0, is_active = 1
                             WHERE recurrence_id = ?
                             """, (recurrence_id,)
-                )
+            )
             conn.commit()
 
         elif payment_uuid:
@@ -348,22 +455,12 @@ def undo_transactions(chat_id, payment_uuid=None, recurrence_id=None):
                             SET execution_status = 0, is_active = 1
                             WHERE UUID = ?
                             """, (payment_uuid,)
-                )
+            )
             conn.commit()
     except Exception as e:
         logging.error(f"{e}")
     finally:
         conn.close()
-
-
-# кнопка Добавить 5
-def ask_for_monthly_recurrence(payment_uuid, message, bot):
-    markup = types.InlineKeyboardMarkup()
-    yes_button = types.InlineKeyboardButton("Да", callback_data=f"[recurrence_yes]_[{payment_uuid}]")
-    no_button = types.InlineKeyboardButton("Нет", callback_data=f"[recurrence_no]_[{payment_uuid}]")
-    markup.add(yes_button, no_button)
-
-    bot.send_message(message.chat.id, "Повторять ежемесячно?", reply_markup=markup)
 
 
 # def update_transaction_status(uuid, status, chat_id):
@@ -490,7 +587,7 @@ def get_transactions_in_date_range(start_date, end_date, message):
                     WHEN transaction_type = ? THEN 2
                 END   
                 """, (start_date, end_date, transaction_type_1, transaction_type_2)
-        )
+    )
     transactions = cursor.fetchall()
     conn.close()
     return transactions
@@ -505,7 +602,7 @@ def create_recurring_payments(payment_uuid, months, chat_id):
     cursor.execute(
         f"""SELECT date, card_name, transaction_type, amount FROM '{chat_id}' WHERE uuid = ?""",
         (payment_uuid,)
-        )
+    )
     original_payment = cursor.fetchone()
     recurrence_id = str(uuid.uuid4())  # Уникальный идентификатор для группы повторов
 
@@ -522,7 +619,7 @@ def create_recurring_payments(payment_uuid, months, chat_id):
                 SET recurrence_id = ?
                 WHERE uuid = ?
                 """, (recurrence_id, payment_uuid)
-            )
+        )
 
         # Создаем последующие транзакции с тем же recurrence_id
         for i in range(1, months + 1):
@@ -538,12 +635,12 @@ def create_recurring_payments(payment_uuid, months, chat_id):
         INSERT INTO '{chat_id}' (uuid, date, card_name, transaction_type, amount, execution_status, recurrence_id)
         VALUES (?, ?, ?, ?, ?, 0, ?)
     """, (new_payment_uuid, next_date.isoformat(), card_name, transaction_type, amount, recurrence_id)
-                )
+            )
 
         conn.commit()
         logging.info(
             f"Созданы повторяющиеся транзакции для UUID {payment_uuid} на {months} месяцев с recurrence_id {recurrence_id}."
-            )
+        )
     else:
         logging.error(f"Исходная транзакция с UUID {payment_uuid} не найдена.")
 
@@ -589,7 +686,7 @@ def process_edit_payment(message, bot, payment_uuid):
 
         cursor.execute(
             f"""SELECT recurrence_id FROM '{chat_id}' WHERE uuid = ?""", (payment_uuid,)
-            )
+        )
         transaction = cursor.fetchone()
         conn.close()
 
@@ -597,13 +694,11 @@ def process_edit_payment(message, bot, payment_uuid):
             recurrence_id = transaction['recurrence_id']
             markup = types.InlineKeyboardMarkup()
             edit_one_button = types.InlineKeyboardButton(
-                "Изменить только эту",
-                callback_data=f"edit_one_{payment_uuid}"
-                )
+                "Изменить только эту", callback_data=f"edit_one_{payment_uuid}"
+            )
             edit_series_button = types.InlineKeyboardButton(
-                "Изменить всю серию",
-                callback_data=f"edit_series_{recurrence_id}"
-                )
+                "Изменить всю серию", callback_data=f"edit_series_{recurrence_id}"
+            )
             markup.add(edit_one_button, edit_series_button)
 
             logging.info(f"Кнопки созданы: edit_one_{payment_uuid} и edit_series_{recurrence_id}")
@@ -611,7 +706,7 @@ def process_edit_payment(message, bot, payment_uuid):
                 message.chat.id,
                 "Эта транзакция является частью серии. Хотите изменить только её или всю серию?",
                 reply_markup=markup
-                )
+            )
         else:
             bot.send_message(message.chat.id, "Введите новые данные в формате: дата карта тип сумма.")
             bot.register_next_step_handler(message, edit_transaction_data, bot=bot, payment_uuid=payment_uuid)
@@ -651,9 +746,8 @@ def edit_transaction_data(message, payment_uuid, bot):
         inputs = message.text.strip().split()
         if len(inputs) != 4:
             bot.send_message(
-                message.chat.id,
-                "Неверное количество параметров. Введите: дата карта тип сумма."
-                )
+                message.chat.id, "Неверное количество параметров. Введите: дата карта тип сумма."
+            )
             return
 
         date_str, card_name, transaction_type_input, amount_str = inputs
@@ -673,7 +767,7 @@ def edit_transaction_data(message, payment_uuid, bot):
                 SET date = ?, card_name = ?, transaction_type = ?, amount = ?
                 WHERE uuid = ?
                 """, (date, card_name, transaction_type, amount, payment_uuid)
-            )
+        )
         conn.commit()
         conn.close()
 
@@ -690,9 +784,8 @@ def edit_series_data(message, recurrence_id, bot, chat_id):
         inputs = message.text.strip().split()
         if len(inputs) != 4:
             bot.send_message(
-                message.chat.id,
-                "Неверное количество параметров. Введите: дата карта тип сумма."
-                )
+                message.chat.id, "Неверное количество параметров. Введите: дата карта тип сумма."
+            )
             return
 
         date_str, card_name, transaction_type_input, amount_str = inputs
@@ -713,7 +806,7 @@ def edit_series_data(message, recurrence_id, bot, chat_id):
                 WHERE recurrence_id = ? AND date >= ?
                 """,
             (date, card_name, transaction_type, amount, recurrence_id, datetime.now().date().isoformat())
-            )
+        )
         conn.commit()
         conn.close()
 
@@ -733,7 +826,7 @@ def update_transaction_status(uuid, status, chat_id):
                 SET execution_status = ?
                 WHERE UUID = ?
                 """, (status, uuid)
-        )
+    )
 
     # Check if any rows were updated
     if cursor.rowcount == 0:
@@ -789,6 +882,7 @@ def send_reminders(bot, chat_id):
 
     current_datetime = datetime.now()
     current_date = current_datetime.date().isoformat()  # Форматируем текущую дату как строку 'YYYY-MM-DD'
+    # print(current_date)
     current_time_str = current_datetime.time().strftime("%H:%M")
 
     conn = get_db_connection()
@@ -804,13 +898,15 @@ def send_reminders(bot, chat_id):
                     WHEN transaction_type = ? THEN 2
                 END
                 """, (transaction_type_1, transaction_type_2)
-        )
+    )
     rows = cursor.fetchall()
     conn.close()
+    logging.info(f"rows for send reminders: {rows}")
 
     for row in rows:
         payment_uuid = row['UUID']
         payment_date = row['date']  # Строка в формате 'YYYY-MM-DD'
+        # print(payment_date)
         card_name = row['card_name']
         transaction_type = row['transaction_type']
         amount = row['amount']
@@ -829,11 +925,13 @@ def send_reminders(bot, chat_id):
             send_reminder_with_buttons(payment_uuid, message_text, transaction_type_lower, bot, chat_id)
 
         # Проверка условий для отправки напоминания на завтра
-        elif (payment_date == (datetime.fromisoformat(current_date) + timedelta(
+        elif payment_date == (datetime.fromisoformat(current_date) + timedelta(
             days=1
-            )).isoformat() and current_time_str == reminder_tomorrow_time):
+        )).isoformat() and current_time_str == reminder_tomorrow_time:
             message_text = f"⏰ Не забудь: Завтра {transaction_type_lower} {amount:,.2f} руб. по карте {card_name}"
             send_reminder_with_buttons(payment_uuid, message_text, transaction_type_lower, bot, chat_id)
+        else:
+            print("nothing to remind")
 
 
 def run_scheduler():
@@ -862,10 +960,10 @@ def is_recurrence(chat_id, payment_uuid):
 			FROM '{chat_id}'
 			WHERE UUID = ?
 			""", (payment_uuid,)
-            )
+        )
         result = cursor.fetchone()
     finally:
         conn.close()
-    print(f"is_recurrence: {result.keys()}")
+    # print(f"is_recurrence: {result.keys()}")
     recurrence_id = result["recurrence_id"]
     return recurrence_id if result else None
