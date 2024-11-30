@@ -45,7 +45,7 @@ def show_today(message, bot, chat_id):
             bot.send_message(message.chat.id, payment_str, reply_markup=markup)
         logging.info(f"Отправлены транзакции на сегодня пользователю {message.chat.id}.")
     else:
-        bot.send_message(message.chat.id, "Нет транзакций на сегодня.")
+        bot.send_message(message.chat.id, "Нет транзакций на сегодня. Можно расслабиться 😌")
         logging.info(f"Транзакций на сегодня нет. Информация отправлена пользователю {message.chat.id}.")
 
 
@@ -107,7 +107,7 @@ def show_nearest_days(message, days, bot):
             bot.send_message(message.chat.id, payment_str, reply_markup=markup)
         logging.info(f'Отправлены транзакции за следующие {days} дней пользователю {message.chat.id}.')
     else:
-        bot.send_message(message.chat.id, f'Нет транзакций за следующие {days} дней.')
+        bot.send_message(message.chat.id, f'Нет транзакций в течение следующих {days} дней 😸')
         logging.info(
             f'Транзакций за следующие {days} дней нет. Информация отправлена пользователю {message.chat.id}.'
         )
@@ -146,7 +146,7 @@ def show_this_month(message, bot, chat_id):
             bot.send_message(message.chat.id, payment_str, reply_markup=markup)
         logging.info(f'Отправлены предстоящие транзакции за текущий месяц пользователю {message.chat.id}.')
     else:
-        bot.send_message(message.chat.id, 'Нет предстоящих транзакций на текущий месяц.')
+        bot.send_message(message.chat.id, 'Нет предстоящих транзакций в текущем месяце 😸')
         logging.info(
             f'Предстоящих транзакций на текущий месяц нет. Информация отправлена пользователю {message.chat.id}.'
         )
@@ -770,7 +770,7 @@ def edit_transaction_data(message, payment_uuid, bot):
         conn.commit()
         conn.close()
 
-        bot.send_message(message.chat.id, "Транзакция успешно обновлена!")
+        bot.send_message(message.chat.id, "Транзакция успешно обновлена! 🥳 Теперь ты не пропустишь очередной платеж!")
 
     except Exception as e:
         bot.send_message(message.chat.id, f"Ошибка: {str(e)}")

@@ -79,10 +79,7 @@ def register_handlers(bot):
         amount = transaction_dict[chat_id]['amount']
         card = transaction_dict[chat_id]['card']
         bot.send_message(
-            chat_id, f"Транзакция \n--{date}\n--{transaction_type}\n--{amount}\n--{card}\nбудет повторяться "
-                     f"ежемесячно в течение"
-                     f" {recurrent_count_months} "
-                     f"месяцев."
+            chat_id, f"Добавлена повторяющаяся транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
 
         )
         save_transactions_to_db(bot, chat_id, payment_uuid=None)
@@ -107,7 +104,7 @@ def register_handlers(bot):
 
         bot.send_message(
             call.message.chat.id,
-            f"Добавлена одиночная транзакция\n--{date}\n--{transaction_type}\n--{amount}\n--{card}\n"
+            f"Добавлена одиночная транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
         )
         save_transactions_to_db(bot, chat_id, payment_uuid)
         markup = undo_save_transactions_to_db_keyboard(payment_uuid)
@@ -198,7 +195,7 @@ def register_handlers(bot):
         user_states.pop(chat_id, None)
 
         bot.send_message(
-            chat_id, f"Карта \"{card_name}\" сохранена"
+            chat_id, f"Карта \"{card_name}\" сохранена. В следующий раз просто выбери ее из списка"
         )
         key = "card"
         create_transactions_dict(chat_id, key, card_name)
