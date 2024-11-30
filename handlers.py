@@ -185,6 +185,17 @@ def register_handlers(bot):
         chat_id = message.chat.id
         card_name = message.text.strip().title()
 
+        def is_valid_card_name(card_name):
+            pattern = r'^[a-zA-Zа-яА-Я0-9 _-]+$'
+            return bool(re.match(pattern, card_name))
+
+        if not is_valid_card_name(card_name):
+            bot.send_message(
+                chat_id,
+                "Недопустимое имя карты. Используйте только буквы, цифры, пробелы, дефисы или подчеркивания."
+            )
+            return
+
         user_states.pop(chat_id, None)
 
         bot.send_message(
@@ -200,10 +211,23 @@ def register_handlers(bot):
     def handle_card_amount_input(message):
         chat_id = message.chat.id
         amount = message.text.strip()
+        amount = re.sub(r"[^\d.]", ".", amount)
 
-        if not amount.isdigit():
-            bot.send_message(chat_id, "Пожалуйста, введите корректную сумму (только цифры)")
+        if "." in amount:
+            integer_part, decimal_part = amount.split(".", 1)
+            decimal_part = decimal_part[:2]
+            amount = f"{integer_part}.{decimal_part}"
+        else:
+            amount = amount
+
+        if not re.fullmatch(r"^\d{1,6}(\.\d{1,2})?$", amount):
+            bot.send_message(
+                chat_id, "Пожалуйста, введите корректную сумму: до 6 цифр перед запятой"
+            )
             return
+
+        amount = float(amount)
+        amount = f"{amount:.2f}"
 
         user_states.pop(chat_id, None)
         key = "amount"
