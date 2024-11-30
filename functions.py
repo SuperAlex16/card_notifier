@@ -7,9 +7,7 @@ import uuid
 from calendar import monthrange
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from functools import partial
 from telebot import types
-from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
 
 from db_functions import get_db_connection
 from keyboards import create_calendar, cards_list_keyboard, recurrence_type_keyboard, \
@@ -34,7 +32,13 @@ def show_today(message, bot, chat_id):
                     payment['date'].split()[0], '%Y-%m-%d'
                 ).date()
             )
-            payment_str = f"{payment['date']} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб."
+            date_obj = datetime.strptime(payment['date'].split()[0], '%Y-%m-%d')
+
+            formatted_date = date_obj.strftime('%d/%m/%Y')
+            payment_str = (f"{formatted_date} ({weekday_short}),"
+                           f" {payment['card_name']},"
+                           f" {payment['transaction_type']}"
+                           f" {payment['amount']:,.2f} руб.")
             payment_uuid = payment['uuid']
 
             markup = transaction_info_keyboard(payment_uuid)
@@ -175,12 +179,7 @@ def create_uuid():
 
 # add transaction
 def start_addition_process(bot, chat_id):
-    markup = types.InlineKeyboardMarkup()
-    cancel_button = types.InlineKeyboardButton("❌ Отменить", callback_data="cancel_addition")
-    markup.add(cancel_button)
     ask_for_transaction_date(bot, chat_id)
-
-    bot.send_message(chat_id, "Вы можете отменить добавление", reply_markup=markup)
 
 
 def ask_for_transaction_date(bot, chat_id):
@@ -262,7 +261,7 @@ def save_transactions_to_db(bot, chat_id, payment_uuid):
         conn.rollback()
     finally:
         conn.close()
-
+        del transaction_dict[chat_id]
 
 
 def undo_save_transactions_to_db(chat_id, action_id):

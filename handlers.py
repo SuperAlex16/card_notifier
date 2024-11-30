@@ -1,5 +1,4 @@
 import re
-from trace import Trace
 
 from telebot import types
 
@@ -183,7 +182,7 @@ def register_handlers(bot):
     )
     def handle_card_name_input(message):
         chat_id = message.chat.id
-        card_name = message.text.strip().title()
+        card_name = message.text.strip()
 
         def is_valid_card_name(card_name):
             pattern = r'^[a-zA-Zа-яА-Я0-9 _-]+$'

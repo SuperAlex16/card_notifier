@@ -85,20 +85,16 @@ def create_calendar(year=datetime.now().year, month=datetime.now().month):
     markup = InlineKeyboardMarkup()
     markup.row_width = 7
 
-    # Получение текущей даты
     today = datetime.now()
     is_current_month = (today.year == year and today.month == month)
 
-    # Заголовок с месяцем и годом
     markup.add(
         InlineKeyboardButton(f"{calendar.month_name[month]} {year}", callback_data="IGNORE")
     )
 
-    # Заголовки дней недели
     days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     markup.add(*[InlineKeyboardButton(day, callback_data="IGNORE") for day in days_of_week])
 
-    # Дни месяца
     cal = calendar.monthcalendar(year, month)
     for week in cal:
         markup.add(
@@ -112,14 +108,12 @@ def create_calendar(year=datetime.now().year, month=datetime.now().month):
             ) for day in week]
         )
 
-    # Кнопки переключения месяца
     prev_month = month - 1 if month > 1 else 12
     next_month = month + 1 if month < 12 else 1
     prev_year = year if month > 1 else year - 1
     next_year = year if month < 12 else year + 1
 
-    # Блокировка перехода на предыдущие месяцы, если они до текущей даты
-    if year < today.year or (year == today.year and month < today.month):
+    if month < is_current_month:
         markup.add(
             InlineKeyboardButton("<<", callback_data="IGNORE"),
             InlineKeyboardButton(">>", callback_data=f"CALENDAR_MONTH_{next_year}_{next_month}")
@@ -173,11 +167,11 @@ def transactions_type_keyboard():
     markup = types.InlineKeyboardMarkup()
 
     deposit_button = types.InlineKeyboardButton(
-        "➕ Внести", callback_data=f"deposit_"
+        "⬆️ Внести", callback_data=f"deposit_"
 
     )
     withdraw_button = types.InlineKeyboardButton(
-        "➖ Снять", callback_data=f"withdraw_"
+        "⬇️ Снять", callback_data=f"withdraw_"
     )
     markup.add(deposit_button, withdraw_button)
 
