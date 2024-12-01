@@ -162,5 +162,4 @@ cython_debug/
 #.idea/
 /temp.txt
 
-# Data base
 transactions.db
