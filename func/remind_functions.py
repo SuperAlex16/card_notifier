@@ -52,13 +52,10 @@ def send_reminders(bot, chat_id):
 
     current_datetime = datetime.now()
     current_date = current_datetime.date().isoformat()
-    # logging.info(f"current date: {current_date}")
 
     current_time_str = current_datetime.time().strftime("%H:%M")
-    # logging.info(f"current time: {current_time_str}")
 
     tomorrow_date = (datetime.fromisoformat(current_date) + timedelta(days=1)).date().isoformat()
-    # logging.info(f"tomorrow date: {tomorrow_date}")
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -76,7 +73,6 @@ def send_reminders(bot, chat_id):
     )
     rows = cursor.fetchall()
     conn.close()
-    # logging.info(f"rows for send reminders: {rows}")
 
     for row in rows:
         payment_uuid = row['UUID']
@@ -85,7 +81,6 @@ def send_reminders(bot, chat_id):
         card_name = row['card_name']
         transaction_type = row['transaction_type']
         amount = row['amount']
-        # execution_status = row['execution_status']
 
         # Проверка условий для отправки напоминания на сегодня
         if payment_date == current_date and current_time_str in reminder_today_times:
@@ -98,7 +93,7 @@ def send_reminders(bot, chat_id):
             message_text = f"⏰ Не забудь: Завтра {transaction_type} {amount:,.2f} руб. по карте {card_name}"
             send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot, chat_id)
         else:
-            logging.info("nothing to remind or time to remind doesn't match")
+            pass
 
 
 def run_scheduler():

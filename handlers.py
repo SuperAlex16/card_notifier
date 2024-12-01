@@ -5,8 +5,9 @@ from telebot import types
 from func.db_functions import init_db
 from func.add_functions import ask_for_amount, ask_for_monthly_recurrence, ask_for_card_name, \
     save_transactions_to_db, undo_save_transactions_to_db, ask_for_transaction_type, start_addition_process
-from func.functions import done_transactions, show_today, undone_transactions, delete_transactions, \
-    show_nearest_days, show_this_month, undo_delete_transactions
+from func.edit_functions import done_transactions, undone_transactions, delete_transactions, \
+    undo_delete_transactions
+from func.functions import show_today, show_nearest_days, show_this_month
 from func.utils import create_transactions_dict, is_recurrence, create_uuid
 from keyboards import (create_calendar, main_menu_keyboard, nearest_menu_keyboard, start_keyboard,
                        delete_transactions_keyboard, undo_save_transactions_to_db_keyboard)
