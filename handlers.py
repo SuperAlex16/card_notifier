@@ -2,19 +2,19 @@ import re
 
 from telebot import types
 
-from db_functions import init_db
-from functions import (ask_for_amount, ask_for_monthly_recurrence, ask_for_card_name,
-                       ask_for_transaction_type, create_transactions_dict, create_uuid, done_transactions,
-                       save_transactions_to_db, show_today, transaction_dict, undo_save_transactions_to_db,
-                       undo_transactions, is_recurrence, delete_transactions, start_addition_process,
-                       show_nearest_days, show_this_month, undo_delete_transactions)
+from func.db_functions import init_db
+from func.add_functions import ask_for_amount, ask_for_monthly_recurrence, ask_for_card_name, \
+    save_transactions_to_db, undo_save_transactions_to_db, ask_for_transaction_type, start_addition_process
+from func.functions import done_transactions, show_today, undone_transactions, delete_transactions, \
+    show_nearest_days, show_this_month, undo_delete_transactions
+from func.utils import create_transactions_dict, is_recurrence, create_uuid
 from keyboards import (create_calendar, main_menu_keyboard, nearest_menu_keyboard, start_keyboard,
                        delete_transactions_keyboard, undo_save_transactions_to_db_keyboard)
-from logger import logging
-from remind_func import run_reminders
+from log.logger import logging
 from settings import db_transaction_types
 
 user_states = {}
+transaction_dict = {}
 
 
 def register_handlers(bot):
@@ -51,7 +51,7 @@ def register_handlers(bot):
                 "day": day
             }
             key = "date"
-            create_transactions_dict(chat_id, key, transaction_date)
+            create_transactions_dict(chat_id, key, transaction_date, transaction_dict)
             bot.send_message(
                 chat_id, f"Дата: {transaction_date['day']}/{transaction_date['month']}"
                          f"/{transaction_date['year']}"
@@ -67,7 +67,7 @@ def register_handlers(bot):
         chat_id = call.message.chat.id
         recurrence_id = create_uuid()
         key = "recurrence_id"
-        create_transactions_dict(chat_id, key, recurrence_id)
+        create_transactions_dict(chat_id, key, recurrence_id, transaction_dict)
 
         date = str(transaction_dict[chat_id]['date']['day']) + '/' + str(
             transaction_dict[chat_id]['date']['month']
@@ -81,7 +81,7 @@ def register_handlers(bot):
             f"Добавлена повторяющаяся транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
 
         )
-        save_transactions_to_db(chat_id, payment_uuid=None)
+        save_transactions_to_db(chat_id, transaction_dict, payment_uuid=recurrence_id)
         markup = undo_save_transactions_to_db_keyboard(recurrence_id)
         bot.send_message(chat_id, "Отменить сохранение?", reply_markup=markup)
 
@@ -91,7 +91,7 @@ def register_handlers(bot):
         payment_uuid = create_uuid()
         recurrence_id = None
         key = "recurrence_id"
-        create_transactions_dict(chat_id, key, recurrence_id)
+        create_transactions_dict(chat_id, key, recurrence_id, transaction_dict)
 
         date = str(transaction_dict[chat_id]['date']['day']) + '/' + str(
             transaction_dict[chat_id]['date']['month']
@@ -105,7 +105,7 @@ def register_handlers(bot):
             call.message.chat.id,
             f"Добавлена одиночная транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
         )
-        save_transactions_to_db(chat_id, payment_uuid)
+        save_transactions_to_db(chat_id, transaction_dict, payment_uuid)
         markup = undo_save_transactions_to_db_keyboard(payment_uuid)
         bot.send_message(chat_id, "Отменить сохранение?", reply_markup=markup)
 
@@ -127,7 +127,7 @@ def register_handlers(bot):
         )
 
         key = "card"
-        create_transactions_dict(chat_id, key, card_name)
+        create_transactions_dict(chat_id, key, card_name, transaction_dict)
         ask_for_transaction_type(bot, chat_id)
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("add_new_card_"))
@@ -147,7 +147,7 @@ def register_handlers(bot):
         transaction_type = db_transaction_types[1]
 
         key = "type"
-        create_transactions_dict(chat_id, key, transaction_type)
+        create_transactions_dict(chat_id, key, transaction_type, transaction_dict)
 
         bot.send_message(
             chat_id, f"Вы выбрали {transaction_type}"
@@ -163,7 +163,7 @@ def register_handlers(bot):
         transaction_type = db_transaction_types[2]
 
         key = "type"
-        create_transactions_dict(chat_id, key, transaction_type)
+        create_transactions_dict(chat_id, key, transaction_type, transaction_dict)
 
         bot.send_message(
             chat_id, f"Вы выбрали {transaction_type}"
@@ -197,7 +197,7 @@ def register_handlers(bot):
             chat_id, f"Карта \"{card_name}\" сохранена. В следующий раз просто выбери ее из списка"
         )
         key = "card"
-        create_transactions_dict(chat_id, key, card_name)
+        create_transactions_dict(chat_id, key, card_name, transaction_dict)
         ask_for_transaction_type(bot, chat_id)
 
     @bot.message_handler(
@@ -226,7 +226,7 @@ def register_handlers(bot):
 
         user_states.pop(chat_id, None)
         key = "amount"
-        create_transactions_dict(chat_id, key, amount)
+        create_transactions_dict(chat_id, key, amount, transaction_dict)
 
         bot.send_message(chat_id, f"Сумма: {amount}")
 
@@ -279,7 +279,7 @@ def register_handlers(bot):
 
         elif call.data.startswith('undo_done_'):
             payment_uuid = call.data.replace('undo_done_', '')
-            undo_transactions(chat_id, payment_uuid)
+            undone_transactions(chat_id, payment_uuid)
 
             bot.send_message(call.message.chat.id, "Выполнение отменено. Транзакция восстановлена.")
 

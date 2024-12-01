@@ -20,7 +20,7 @@ nearest_menu_keyboard_text = {
 reminder_period = 1
 
 reminder_today_times = ["10:00", "14:00", "17:00", "23:09"]
-reminder_tomorrow_time = "18:40"
+reminder_tomorrow_times = "18:40"
 
 recurrent_count_months = 36
 

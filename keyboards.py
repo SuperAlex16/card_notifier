@@ -4,9 +4,9 @@ from datetime import datetime
 from telebot import types
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from db_functions import get_db_connection
-from logger import logging
-from settings import main_menu_keyboard_text, nearest_menu_keyboard_text
+from func.db_functions import get_db_connection
+from log.logger import logging
+from settings import main_menu_keyboard_text, nearest_menu_keyboard_text, db_transaction_types
 
 
 def start_keyboard():
@@ -189,14 +189,26 @@ def recurrence_type_keyboard():
 
 def undo_save_transactions_to_db_keyboard(payment_uuid=None, recurrence_id=None):
     markup = types.InlineKeyboardMarkup()
-    if payment_uuid:
+    if payment_uuid is not None:
         undo_add_transactions_button = types.InlineKeyboardButton(
             "❌ Отменить", callback_data=f"undo_add_transactions_{payment_uuid}"
         )
         markup.add(undo_add_transactions_button)
-    elif recurrence_id:
+    elif recurrence_id is not None:
         undo_add_transactions_button = types.InlineKeyboardButton(
             "❌ Отменить", callback_data=f"undo_add_transactions_{recurrence_id}"
         )
         markup.add(undo_add_transactions_button)
+    return markup
+
+
+def send_reminder_keyboard(payment_uuid, transaction_type):
+    markup = types.InlineKeyboardMarkup()
+    if transaction_type == db_transaction_types[1]:
+        button = types.InlineKeyboardButton("☑️ Уже внес", callback_data=f"done_{payment_uuid}")
+    elif transaction_type == db_transaction_types[2]:
+        button = types.InlineKeyboardButton("✅ Уже снял", callback_data=f"withdrawn_{payment_uuid}")
+    else:
+        button = types.InlineKeyboardButton("✅ Выполнено", callback_data=f"done_{payment_uuid}")
+    markup.add(button)
     return markup

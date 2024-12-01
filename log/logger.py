@@ -18,7 +18,7 @@ logging.add(
     colorize=True,
     format="<green>{time:YYYY-MM-DD HH:mm:ss,SSS}</green> | "
            "<level>{level: <8}</level> | "
-           "<cyan>{module: >15}</cyan> : "
-           "<yellow>{function: <20}</yellow> - "
+           "<cyan>{module: >18}</cyan> : "
+           "<yellow>{function: <22}</yellow> - "
            "<level>{message: <40}</level>"
 ))

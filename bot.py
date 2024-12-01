@@ -5,8 +5,8 @@ import time
 
 from dotenv import load_dotenv
 from handlers import register_handlers
-from logger import logging
-from remind_func import run_reminders
+from log.logger import logging
+from func.remind_functions import run_reminders
 
 load_dotenv()
 
