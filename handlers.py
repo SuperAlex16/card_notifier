@@ -1,383 +1,338 @@
 import re
 
-from db_functions import init_db
-from remind_func import *
-from functions import *
-from keyboards import main_menu_keyboard, nearest_menu_keyboard, start_keyboard
-from logger import logging
-from settings import reccurent_count_months
+from telebot import types
+
+from func.db_functions import init_db
+from func.add_functions import ask_for_amount, ask_for_monthly_recurrence, ask_for_card_name, \
+    save_transactions_to_db, undo_save_transactions_to_db, ask_for_transaction_type, start_addition_process
+from func.edit_functions import done_transactions, undone_transactions, delete_transactions, \
+    undo_delete_transactions
+from func.functions import show_today, show_nearest_days, show_this_month
+from func.utils import create_transactions_dict, is_recurrence, create_uuid
+from keyboards import (create_calendar, main_menu_keyboard, nearest_menu_keyboard, start_keyboard,
+                       delete_transactions_keyboard, undo_save_transactions_to_db_keyboard)
+from log.logger import logging
+from settings import db_transaction_types
+
+user_states = {}
+transaction_dict = {}
 
 
 def register_handlers(bot):
-	@bot.message_handler(func=lambda message: message.text == "/start")
-	def handle_start_button(message):
-		# bot.send_message(message.chat.id, "Вы нажали кнопку 'Начать'!")
-		user_chat_id = message.chat.id
-		logging.info(f'id пользователя: {user_chat_id}')
-		init_db(user_chat_id)
-		logging.info('Таблица в БД активирована')
-		run_reminders(bot, user_chat_id)
-		logging.info(f'Запущен run_reminders для чата {user_chat_id}')
-		logging.info(f'Пользователь {user_chat_id} запустил бота')
-		markup = start_keyboard()
-		bot.send_message(message.chat.id, f'Привет, {message.from_user.first_name}', reply_markup=markup)
+    @bot.message_handler(func=lambda message: message.text == "/start")
+    def handle_start_button(message):
+        chat_id = message.chat.id
+        logging.info(f"id пользователя: {chat_id}")
+        init_db(chat_id)
+        logging.info("Таблица в БД активирована")
+        # run_reminders(bot, chat_id)
+        # logging.info(f"Запущен run_reminders для чата {chat_id}")
+        logging.info(f"Пользователь {chat_id} запустил бота")
+        markup = start_keyboard()
+        bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}", reply_markup=markup)
 
-	@bot.message_handler(func=lambda message: True)
-	def handle_menu(message):
-		chat_id = message.chat.id
-		if message.text == "📅 Что сегодня?":
-			show_today(message, bot, chat_id)
-		elif message.text == "🔜 Ближайшие":
-			bot.send_message(message.chat.id, 'Выберите период:', reply_markup=nearest_menu_keyboard())
-		elif message.text == "➕ Добавить":
-			start_addition_process(message, bot, chat_id)
-		elif message.text == '✏️ Редактировать':
-			edit_payments(message, bot)
-		elif message.text == '3️⃣ дня':
-			show_nearest_days(message, 3, bot)
-		elif message.text == '7️⃣ дней':
-			show_nearest_days(message, 7, bot)
-		elif message.text == '3️⃣0️⃣ дней':
-			show_nearest_days(message, 30, bot)
-		elif message.text == '🗓 Этот месяц':
-			show_this_month(message, bot, chat_id)
-		elif message.text == '◀️ Назад':
-			bot.send_message(message.chat.id, 'Выберите действие:', reply_markup=main_menu_keyboard())
-		else:
-			bot.send_message(message.chat.id, 'Пожалуйста, выберите действие из меню:',
-							 reply_markup=main_menu_keyboard())
+    @bot.callback_query_handler(func=lambda call: call.data.startswith('CALENDAR_'))
+    def handle_calendar(call):
+        chat_id = call.message.chat.id
+        data = call.data.split('_')
+        action = data[1]
+        print(action)
+        if action == "MONTH":
+            year, month = int(data[2]), int(data[3])
+            calendar = create_calendar(year, month)
+            bot.edit_message_reply_markup(
+                call.message.chat.id, call.message.message_id, reply_markup=calendar
+            )
 
-	# # @bot.callback_query_handler(
-	# #     func=lambda call: call.data.startswith('delete_one_') or call.data.startswith('delete_series_'))
-	# # def handle_delete_choice(call):
-	# #     data = call.data
-	# #     logging.info(f'Обработчик handle_delete_choice вызван с данными: {data}')
-	# #     if data.startswith('delete_one_'):
-	# #         payment_uuid = data.replace('delete_one_', '')
-	# #         delete_one_transaction(payment_uuid)
-	# #         bot.send_message(call.message.chat.id, 'Транзакция удалена.')
-	# #     elif data.startswith('delete_series_'):
-	# #         recurrence_id = data.replace('delete_series_', '')
-	# #         delete_series(recurrence_id)
-	# #         bot.send_message(call.message.chat.id, 'Вся серия транзакций удалена.')
-	#
-	# # @bot.callback_query_handler(func=lambda call: call.data.startswith('restore_series_'))
-	# # def handle_restore_series(call):
-	# #     recurrence_id = call.data.replace('restore_series_', '')
-	# #     restore_transaction(recurrence_id=recurrence_id)
-	# #     bot.send_message(call.message.chat.id, 'Вся серия транзакций восстановлена.')
-	#
-	# # Обработчик нажатия кнопки 'Отменить добавление'
-	# @bot.callback_query_handler(func=lambda call: call.data == 'cancel_addition')
-	# def handle_cancel_addition(call):
-	#     # Очистка данных о добавляемой транзакции, если они есть
-	#     if call.message.chat.id in payment_data:
-	#         if 'last_payment_uuid' in payment_data[call.message.chat.id]:
-	#             del payment_data[call.message.chat.id]['last_payment_uuid']
-	#             logging.info(f'Процесс добавления транзакции отменен пользователем {call.message.chat.id}.')
-	#
-	#     # Очищаем шаг ожидания ввода данных
-	#     bot.clear_step_handler(call.message)
-	#
-	#     # Уведомляем пользователя об отмене
-	#     bot.send_message(call.message.chat.id, 'Процесс добавления транзакции отменен.')
+        elif action == "DAY":
+            year, month, day = int(data[2]), int(data[3]), int(data[4])
+            transaction_date = {
+                "year": year,
+                "month": month,
+                "day": day
+            }
+            key = "date"
+            create_transactions_dict(chat_id, key, transaction_date, transaction_dict)
+            bot.send_message(
+                chat_id, f"Дата: {transaction_date['day']}/{transaction_date['month']}"
+                         f"/{transaction_date['year']}"
+            )
+            ask_for_card_name(bot, chat_id)
 
-	@bot.callback_query_handler(func=lambda call: call.data.startswith("[recurrence"))
-	def handle_recurrence_selection(call):
-		match = re.match(r"\[(.*?)\]_\[(.*?)\]", call.data)
-		action, payment_uuid = match.groups()
-		print(f"action: {action}, UUID: {payment_uuid}")
-		if action == 'recurrence_yes':
-			create_recurring_payments(payment_uuid, reccurent_count_months, call.message.chat.id)
-			bot.send_message(call.message.chat.id,
-							 f"Транзакция будет повторяться ежемесячно в течение {reccurent_count_months} месяцев.")
-		elif action == 'recurrence_no':
-			bot.send_message(call.message.chat.id, 'Транзакция добавлена без повторения.')
-		else:
-			bot.send_message(call.message.chat.id, 'Ошибка: данные транзакции не найдены.')
+    @bot.callback_query_handler(func=lambda call: call.data == "IGNORE")
+    def ignore(call):
+        bot.answer_callback_query(call.id)
 
-	@bot.callback_query_handler(func=lambda call: True)
-	def handle_callback_query(call):
-		logging.info(f'Received callback: {call.data} from user {call.from_user.id}')
-		chat_id = call.message.chat.id
-		# Обработка выполнения транзакции
-		if call.data.startswith('done_') or call.data.startswith('withdrawn_'):
-			payment_uuid = call.data.split('_')[1]
-			new_status = 1 if call.data.startswith('done_') else 0
-			update_transaction_status(payment_uuid, new_status, chat_id)
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("recurrence"))
+    def handle_recurrence_selection(call):
+        chat_id = call.message.chat.id
+        recurrence_id = create_uuid()
+        key = "recurrence_id"
+        create_transactions_dict(chat_id, key, recurrence_id, transaction_dict)
 
-			# Добавляем кнопку 'Готово. Отменить?' для возможности отмены выполнения
-			markup = types.InlineKeyboardMarkup()
-			undo_button = types.InlineKeyboardButton('❌ Готово. Отменить?',
-													 callback_data=f'undo_done_{payment_uuid}_reminder')
-			markup.add(undo_button)
+        date = str(transaction_dict[chat_id]['date']['day']) + '/' + str(
+            transaction_dict[chat_id]['date']['month']
+        ) + '/' + str(transaction_dict[chat_id]['date']['year'])
 
-			try:
-				bot.edit_message_reply_markup(
-					chat_id=call.message.chat.id,
-					message_id=call.message.message_id,
-					reply_markup=markup
-				)
-				bot.answer_callback_query(call.id, 'Статус транзакции обновлён.')
-			except Exception as e:
-				logging.error(f'Ошибка при редактировании сообщения: {e}')
-				bot.answer_callback_query(call.id, 'Не удалось обновить статус транзакции.')
+        transaction_type = transaction_dict[chat_id]['type']
+        amount = transaction_dict[chat_id]['amount']
+        card = transaction_dict[chat_id]['card']
+        bot.send_message(
+            chat_id,
+            f"Добавлена повторяющаяся транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
 
-		# Обработка отмены выполнения для напоминания или транзакции
-		elif call.data.startswith('undo_done_'):
-			# Проверяем, был ли это отмененный статус для напоминания или обычной транзакции
-			data_parts = call.data.split('_')
-			payment_uuid = data_parts[2]
-			is_reminder = data_parts[-1] == 'reminder'
+        )
+        save_transactions_to_db(chat_id, transaction_dict, payment_uuid=recurrence_id)
+        markup = undo_save_transactions_to_db_keyboard(recurrence_id)
+        bot.send_message(chat_id, "Отменить сохранение?", reply_markup=markup)
 
-			# Получаем транзакцию для определения типа кнопок
-			transaction = get_transaction_by_uuid(payment_uuid, chat_id)
-			if transaction:
-				markup = types.InlineKeyboardMarkup()
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("no_recurrence"))
+    def handle_recurrence_selection(call):
+        chat_id = call.message.chat.id
+        payment_uuid = create_uuid()
+        recurrence_id = None
+        key = "recurrence_id"
+        create_transactions_dict(chat_id, key, recurrence_id, transaction_dict)
 
-				# Если это отмена выполнения для напоминания, возвращаем одну кнопку
-				if is_reminder:
-					if transaction['transaction_type'].lower() == 'внести':
-						original_button = types.InlineKeyboardButton('☑️ Уже внес',
-																	 callback_data=f'done_{payment_uuid}')
-					elif transaction['transaction_type'].lower() == 'снять':
-						original_button = types.InlineKeyboardButton('✅ Уже снял',
-																	 callback_data=f'withdrawn_{payment_uuid}')
-					else:
-						original_button = types.InlineKeyboardButton('✅ Выполнено',
-																	 callback_data=f'done_{payment_uuid}')
-					markup.add(original_button)
-				else:
-					# Если это отмена выполнения для обычной транзакции, возвращаем три кнопки
-					done_button = types.InlineKeyboardButton('✅', callback_data=f'done_{payment_uuid}')
-					edit_button = types.InlineKeyboardButton('✏️', callback_data=f'edit_{payment_uuid}')
-					delete_button = types.InlineKeyboardButton('🗑️', callback_data=f'delete_{payment_uuid}')
-					markup.add(done_button, edit_button, delete_button)
+        date = str(transaction_dict[chat_id]['date']['day']) + '/' + str(
+            transaction_dict[chat_id]['date']['month']
+        ) + '/' + str(transaction_dict[chat_id]['date']['year'])
 
-				try:
-					bot.edit_message_reply_markup(
-						chat_id=call.message.chat.id,
-						message_id=call.message.message_id,
-						reply_markup=markup
-					)
-					bot.answer_callback_query(call.id, 'Отмена выполнена.')
-				except Exception as e:
-					logging.error(f'Ошибка при редактировании сообщения: {e}')
-					bot.answer_callback_query(call.id, 'Не удалось отменить выполнение транзакции.')
+        transaction_type = transaction_dict[chat_id]['type']
+        amount = transaction_dict[chat_id]['amount']
+        card = transaction_dict[chat_id]['card']
 
+        bot.send_message(
+            call.message.chat.id,
+            f"Добавлена одиночная транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
+        )
+        save_transactions_to_db(chat_id, transaction_dict, payment_uuid)
+        markup = undo_save_transactions_to_db_keyboard(payment_uuid)
+        bot.send_message(chat_id, "Отменить сохранение?", reply_markup=markup)
 
-		# Обработка отмены действия выполнения ('undo_')
-		elif call.data.startswith('undo_done_'):
-			# Извлекаем UUID для отмены
-			payment_uuid = call.data.replace('undo_done_', '')
-			update_transaction_status(payment_uuid, chat_id, 0)
-			logging.info(f'Транзакция с UUID {payment_uuid} отменена.')
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("undo_add_transactions_"))
+    def handle_undo_add_transactions(call):
+        chat_id = call.message.chat.id
+        action_id = call.data.split('undo_add_transactions_')[1]
 
-			# Восстановление начальных кнопок: выполнить или внести/снять
-			markup = types.InlineKeyboardMarkup()
-			done_button = types.InlineKeyboardButton('✅', callback_data=f'done_{payment_uuid}')
-			withdrawn_button = types.InlineKeyboardButton('✅ Уже снял', callback_data=f'withdrawn_{payment_uuid}')
-			markup.add(done_button, withdrawn_button)
+        undo_save_transactions_to_db(chat_id, action_id)
 
-			try:
-				# Обновляем сообщение с кнопками
-				bot.edit_message_reply_markup(
-					chat_id=call.message.chat.id,
-					message_id=call.message.message_id,
-					reply_markup=markup
-				)
-				bot.answer_callback_query(call.id, "Отметка отменена.")
-			except Exception as e:
-				logging.error(f"Ошибка при редактировании сообщения: {e}")
-				bot.answer_callback_query(call.id, "Не удалось отменить отметку транзакции.")
+        bot.send_message(chat_id, "Транзакция не сохранена")
 
-			# Обновление статуса транзакции на 0 (не выполнено)
-			update_transaction_status(payment_uuid, chat_id, 0)
-			logging.info(f"Транзакция с UUID {payment_uuid} отменена.")
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("select_card_"))
+    def handle_card_selection(call):
+        chat_id = call.message.chat.id
+        card_name = call.data.split("select_card_")[1]
+        bot.send_message(
+            chat_id, f"Вы выбрали карту: {card_name}"
+        )
 
-			# Восстановление всех кнопок: выполнение, редактирование, удаление
-			markup = types.InlineKeyboardMarkup()
-			done_button = types.InlineKeyboardButton("✅", callback_data=f"done_{payment_uuid}")
-			edit_button = types.InlineKeyboardButton("✏️", callback_data=f"edit_{payment_uuid}")
-			delete_button = types.InlineKeyboardButton("🗑️", callback_data=f"delete_{payment_uuid}")
-			markup.add(done_button, edit_button, delete_button)
+        key = "card"
+        create_transactions_dict(chat_id, key, card_name, transaction_dict)
+        ask_for_transaction_type(bot, chat_id)
 
-			try:
-				# Обновляем сообщение с кнопками
-				bot.edit_message_reply_markup(
-					chat_id=call.message.chat.id,
-					message_id=call.message.message_id,
-					reply_markup=markup
-				)
-				bot.answer_callback_query(call.id, "Отметка отменена.")
-			except Exception as e:
-				logging.error(f"Ошибка при редактировании сообщения: {e}")
-				bot.answer_callback_query(call.id, "Не удалось отменить отметку транзакции.")
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("add_new_card_"))
+    def handle_new_card_creation(call):
+        chat_id = call.message.chat.id
 
-		# Подтверждение удаления транзакции
-		elif call.data.startswith("delete_"):
-			payment_uuid = call.data.replace("delete_", "")
+        bot.send_message(
+            chat_id, f"Введите название карты:"
+        )
+        user_states[chat_id] = {
+            "state": "waiting_for_card_name",
+        }
 
-			markup = types.InlineKeyboardMarkup()
-			confirm_button = types.InlineKeyboardButton("Да", callback_data=f"confirm_delete_{payment_uuid}")
-			cancel_button = types.InlineKeyboardButton("Нет", callback_data="cancel_delete")
-			markup.add(confirm_button, cancel_button)
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("deposit_"))
+    def handle_deposit(call):
+        chat_id = call.message.chat.id
+        transaction_type = db_transaction_types[1]
 
-			bot.send_message(call.message.chat.id, "Точно удалить эту транзакцию?", reply_markup=markup)
+        key = "type"
+        create_transactions_dict(chat_id, key, transaction_type, transaction_dict)
 
-		elif call.data.startswith("delete_series_"):
-			reccurence_id = call.data.replace("delete_series_", "")
-			markup = types.InlineKeyboardMarkup()
-			confirm_button = types.InlineKeyboardButton("Да", callback_data=f"confirm_delete_{reccurence_id}")
-			cancel_button = types.InlineKeyboardButton("Нет", callback_data='cancel_delete')
-			markup.add(confirm_button, cancel_button)
+        bot.send_message(
+            chat_id, f"Вы выбрали {transaction_type}"
+        )
+        ask_for_amount(bot, chat_id)
+        user_states[chat_id] = {
+            "state": "waiting_for_amount",
+        }
 
-			bot.send_message(call.message.chat.id, "Удалить серию транзакций?", reply_markup=markup)
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("withdraw_"))
+    def handle_deposit(call):
+        chat_id = call.message.chat.id
+        transaction_type = db_transaction_types[2]
 
-		# Удаление транзакции с возможностью отмены
-		elif call.data.startswith("confirm_delete_"):
-			payment_uuid = call.data.replace("confirm_delete_", "")
+        key = "type"
+        create_transactions_dict(chat_id, key, transaction_type, transaction_dict)
 
-			# Удаление транзакции
-			delete_transaction(payment_uuid, call.message.chat.id, bot)
+        bot.send_message(
+            chat_id, f"Вы выбрали {transaction_type}"
+        )
+        ask_for_amount(bot, chat_id)
+        user_states[chat_id] = {
+            "state": "waiting_for_amount",
+        }
 
-			# Добавляем кнопку для отмены удаления
-			markup = types.InlineKeyboardMarkup()
-			undo_button = types.InlineKeyboardButton("❌ Отменить удаление", callback_data=f"undo_delete_{payment_uuid}")
-			markup.add(undo_button)
+    @bot.message_handler(
+        func=lambda message: user_states.get(message.chat.id, {}).get("state") == "waiting_for_card_name"
+    )
+    def handle_card_name_input(message):
+        chat_id = message.chat.id
+        card_name = message.text.strip()
 
-			# Отправляем сообщение с кнопкой для отмены
-			bot.send_message(call.message.chat.id, "Транзакция удалена. Вы можете отменить удаление:",
-							 reply_markup=markup)
+        def is_valid_card_name(card_name):
+            pattern = r'^[a-zA-Zа-яА-Я0-9 _-]+$'
+            return bool(re.match(pattern, card_name))
 
-		# Отмена удаления транзакции
-		elif call.data.startswith("undo_delete_"):
-			payment_uuid = call.data.replace("undo_delete_", "")
-			conn = get_db_connection()
-			cursor = conn.cursor()
+        if not is_valid_card_name(card_name):
+            bot.send_message(
+                chat_id,
+                "Недопустимое имя карты. Используйте только буквы, цифры, пробелы, дефисы или подчеркивания."
+            )
+            return
 
-			# Проверяем, является ли транзакция частью серии
-			cursor.execute(f"""SELECT recurrence_id FROM '{chat_id}' WHERE uuid = ?""", (payment_uuid,))
-			result = cursor.fetchone()
-			conn.close()
+        user_states.pop(chat_id, None)
 
-			if result and result['recurrence_id']:
-				recurrence_id = result['recurrence_id']
-				restore_transaction(chat_id, recurrence_id=recurrence_id)
-				bot.send_message(call.message.chat.id, "Удаление отменено. Вся серия транзакций восстановлена.")
-			else:
-				restore_transaction(chat_id, uuid=payment_uuid)
-				bot.send_message(call.message.chat.id, "Удаление отменено. Транзакция восстановлена.")
+        bot.send_message(
+            chat_id, f"Карта \"{card_name}\" сохранена. В следующий раз просто выбери ее из списка"
+        )
+        key = "card"
+        create_transactions_dict(chat_id, key, card_name, transaction_dict)
+        ask_for_transaction_type(bot, chat_id)
 
+    @bot.message_handler(
+        func=lambda message: user_states.get(message.chat.id, {}).get("state") == "waiting_for_amount"
+    )
+    def handle_card_amount_input(message):
+        chat_id = message.chat.id
+        amount = message.text.strip()
+        amount = re.sub(r"[^\d.]", ".", amount)
 
-		# Отмена действия удаления
-		elif call.data == "cancel_delete":
-			bot.send_message(call.message.chat.id, "Удаление отменено.")
+        if "." in amount:
+            integer_part, decimal_part = amount.split(".", 1)
+            decimal_part = decimal_part[:2]
+            amount = f"{integer_part}.{decimal_part}"
+        else:
+            amount = amount
 
-		# Редактирование транзакции
-		elif call.data.startswith("edit_"):
-			payment_uuid = call.data.split("_")[-1]
-			logging.info(f"Получен UUID для редактирования: {payment_uuid}")
+        if not re.fullmatch(r"^\d{1,6}(\.\d{1,2})?$", amount):
+            bot.send_message(
+                chat_id, "Пожалуйста, введите корректную сумму: до 6 цифр перед запятой"
+            )
+            return
 
-			# Проверка существования UUID
-			transaction = get_transaction_by_uuid(payment_uuid, chat_id)
-			if not transaction:
-				bot.answer_callback_query(call.id, "Транзакция не найдена.")
-				logging.error(f"Транзакция с UUID {payment_uuid} не найдена.")
-				return
+        amount = float(amount)
+        amount = f"{amount:.2f}"
 
-			# # Сохраняем UUID для редактирования
-			# if call.from_user.id not in payment_data:
-			#     payment_data[call.from_user.id] = {}
-			# payment_data[call.from_user.id]['edit_uuid'] = payment_uuid
+        user_states.pop(chat_id, None)
+        key = "amount"
+        create_transactions_dict(chat_id, key, amount, transaction_dict)
 
-			# Получаем данные существующей транзакции для отображения пользователю
-			payment_date = transaction['date']
-			card_name = transaction['card_name']
-			transaction_type = transaction['transaction_type']
-			amount = transaction['amount']
+        bot.send_message(chat_id, f"Сумма: {amount}")
 
-			bot.send_message(
-				call.message.chat.id,
-				f"Редактируем транзакцию:\nДата: {payment_date}, Карта: {card_name}, Тип: {transaction_type}, Сумма: {amount}\n\nВведите новые данные в формате: дата карта тип сумма."
-			)
+        ask_for_monthly_recurrence(bot, chat_id)
 
-			# Регистрация следующего шага для обработки новых данных
-			bot.register_next_step_handler_by_chat_id(call.message.chat.id, process_edit_payment,
-													  bot=bot, payment_uuid=payment_uuid)
+    @bot.message_handler(func=lambda message: True)
+    def handle_menu(message):
+        chat_id = message.chat.id
+        if message.text == "📅 Что сегодня?":
+            show_today(message, bot, chat_id)
+        elif message.text == "🔜 Ближайшие":
+            bot.send_message(message.chat.id, 'Выберите период:', reply_markup=nearest_menu_keyboard())
+        elif message.text == "➕ Добавить":
+            start_addition_process(bot, chat_id)
+        # elif message.text == '✏️ Редактировать':
+        #     edit_payments(message, bot)
+        elif message.text == '3️⃣ дня':
+            show_nearest_days(message, 3, bot)
+        elif message.text == '7️⃣ дней':
+            show_nearest_days(message, 7, bot)
+        elif message.text == '3️⃣0️⃣ дней':
+            show_nearest_days(message, 30, bot)
+        elif message.text == '🗓 Этот месяц':
+            show_this_month(message, bot, chat_id)
+        elif message.text == '◀️ Назад':
+            bot.send_message(message.chat.id, 'Выберите действие:', reply_markup=main_menu_keyboard())
+        else:
+            bot.send_message(
+                message.chat.id, 'Пожалуйста, выберите действие из меню:', reply_markup=main_menu_keyboard()
+            )
 
-			# Добавляем кнопку "❌ Отменить редактирование"
-			markup = types.InlineKeyboardMarkup()
-			cancel_button = types.InlineKeyboardButton("❌ Отменить редактирование",
-													   callback_data=f"cancel_edit_{payment_uuid}")
-			markup.add(cancel_button)
+    @bot.callback_query_handler(func=lambda call: True)
+    def handle_callback_query(call):
+        logging.info(f'Received callback: {call.data} from user {call.from_user.id}')
+        chat_id = call.message.chat.id
+        # done
+        if call.data.startswith('done_'):
+            payment_uuid = call.data.replace('done_', '')
+            done_transactions(chat_id, payment_uuid)
 
-			# Отправляем сообщение с кнопкой
-			bot.send_message(call.message.chat.id, "Или нажмите кнопку ниже, чтобы выйти из режима редактирования:",
-							 reply_markup=markup)
+            markup = types.InlineKeyboardMarkup()
+            undo_button = types.InlineKeyboardButton('❌ Отменить', callback_data=f'undo_done_{payment_uuid}')
+            markup.add(undo_button)
 
-		# Отмена редактирования транзакции ГОТОВО
-		elif call.data.startswith("cancel_edit_"):
-			payment_uuid = call.data.replace("cancel_edit_", "")
+            bot.send_message(
+                call.message.chat.id,
+                "Транзакция выполнена. Вы можете отменить действие:",
+                reply_markup=markup
+            )
 
-			# Удаляем данные редактирования
-			# if call.from_user.id in payment_data and 'edit_uuid' in payment_data[call.from_user.id]:
-			# del payment_data[call.from_user.id]['edit_uuid']
-			bot.clear_step_handler(call.message)  # Очищаем шаг ожидания ввода данных
-			bot.send_message(call.message.chat.id, "Редактирование отменено.")
-			main_menu_keyboard(call.message, bot)
-		else:
-			bot.answer_callback_query(call.id, "Редактирование не активно.")
+        elif call.data.startswith('undo_done_'):
+            payment_uuid = call.data.replace('undo_done_', '')
+            undone_transactions(chat_id, payment_uuid)
 
-	# @bot.callback_query_handler(func=lambda call: call.data in ["recurrence_yes", "recurrence_no"])
-	# def update_existing_payment(payment_uuid, date, card_name, transaction_type, amount):
-	#     logging.info(f"Начало обновления транзакции с UUID: {payment_uuid}")
-	#
-	#     # Подключение к базе данных SQLite
-	#     conn = get_db_connection()
-	#     cursor = conn.cursor()
-	#
-	#     # Обновляем запись в таблице transactions
-	#     cursor.execute("""
-	#         UPDATE transactions
-	#         SET date = ?, card_name = ?, transaction_type = ?, amount = ?
-	#         WHERE uuid = ?
-	#     """, (date.isoformat(), card_name, transaction_type, amount, payment_uuid))
-	#
-	#     # Проверяем, была ли обновлена строка
-	#     if cursor.rowcount == 0:
-	#         logging.error(f"Транзакция с UUID {payment_uuid} не найдена для обновления.")
-	#     else:
-	#         logging.info(f"Транзакция с UUID {payment_uuid} успешно обновлена в базе данных.")
-	#
-	#     conn.commit()  # Сохраняем изменения в базе данных
-	#     conn.close()  # Закрываем подключение
-	#
-	@bot.callback_query_handler(
-		func=lambda call: call.data.startswith("edit_one_") or call.data.startswith("edit_series_"))
-	def handle_edit_choice(call):
-		chat_id = call.message.chat.id
-		logging.info(f"Вызван обработчик handle_edit_choice с callback_data: {call.data}")
-		data = call.data
+            bot.send_message(call.message.chat.id, "Выполнение отменено. Транзакция восстановлена.")
 
-		if data.startswith("edit_one_"):
-			payment_uuid = data.replace("edit_one_", "")
-			logging.info(f"Пытаемся найти транзакцию с UUID: {payment_uuid} без префиксов")
-			transaction = find_transaction(payment_uuid, chat_id)
+        elif call.data.startswith("delete_"):
+            payment_uuid = call.data.replace("delete_", "")
+            recurrence_id = is_recurrence(chat_id, payment_uuid)
+            markup, message = delete_transactions_keyboard(payment_uuid, recurrence_id)
 
-			if transaction:
-				logging.info(f"Транзакция найдена для редактирования: {transaction}")
-				bot.send_message(call.message.chat.id,
-								 "Введите новые данные для редактирования этой транзакции в формате: дата карта тип сумма.")
-				bot.register_next_step_handler(call.message, edit_transaction_data, payment_uuid)
-			else:
-				logging.warning(f"Транзакция для редактирования с UUID {payment_uuid} не найдена.")
-				bot.send_message(call.message.chat.id, "Транзакция для редактирования не найдена.")
+            bot.send_message(call.message.chat.id, f"{message}", reply_markup=markup)
 
-		elif data.startswith("edit_series_"):
-			recurrence_id = data.replace("edit_series_", "")
-			logging.info(f"Пытаемся найти серию транзакций с recurrence_id: {recurrence_id}")
-			bot.send_message(call.message.chat.id,
-							 "Введите новые данные для редактирования всей серии в формате: дата карта тип сумма.")
-			bot.register_next_step_handler(call.message, edit_series_data, bot=bot, recurrence_id=recurrence_id,
-										   chat_id=chat_id)
+        elif call.data.startswith("confirm_delete_"):
+            payment_uuid = call.data.replace("confirm_delete_", "")
+
+            delete_transactions(call.message.chat.id, payment_id=payment_uuid, recurrence_id=None)
+
+            markup = types.InlineKeyboardMarkup()
+            undo_button = types.InlineKeyboardButton(
+                "❌ Отменить", callback_data=f"undo_delete_{payment_uuid}"
+            )
+            markup.add(undo_button)
+
+            bot.send_message(
+                call.message.chat.id, "Транзакция удалена. Вы можете отменить удаление:", reply_markup=markup
+            )
+
+        elif call.data.startswith("series_delete_"):
+            recurrence_id = call.data.replace("series_delete_", "")
+
+            delete_transactions(chat_id, payment_id=None, recurrence_id=recurrence_id)
+
+            markup = types.InlineKeyboardMarkup()
+            undo_button = types.InlineKeyboardButton(
+                "❌ Отменить", callback_data=f"undo_series_delete_{recurrence_id}"
+            )
+            markup.add(undo_button)
+
+            bot.send_message(
+                call.message.chat.id,
+                "Серия транзакций удалена. Вы можете отменить удаление:",
+                reply_markup=markup
+            )
+
+        elif call.data.startswith("undo_delete_"):
+            payment_uuid = call.data.replace("undo_delete_", "")
+
+            undo_delete_transactions(chat_id, payment_id=payment_uuid, recurrence_id=None)
+
+            bot.send_message(call.message.chat.id, "Удаление отменено. Транзакция восстановлена.")
+
+        elif call.data.startswith("undo_series_delete_"):
+            recurrence_id = call.data.replace("undo_series_delete_", "")
+
+            undo_delete_transactions(chat_id, payment_id=None, recurrence_id=recurrence_id)
+
+            bot.send_message(call.message.chat.id, "Удаление отменено. Серия транзакций восстановлена.")
