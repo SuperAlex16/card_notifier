@@ -6,6 +6,7 @@ import time
 from dotenv import load_dotenv
 from handlers import register_handlers
 from logger import logging
+from remind_func import run_reminders
 
 load_dotenv()
 
@@ -18,15 +19,14 @@ if not token:
 
 def main(bot):
     register_handlers(bot)
-
+    run_reminders(bot=bot)
+    logging.info(f"Bot is running.")
     while True:
         try:
             logging.info(f"Start bot.polling: {bot}")
             bot.polling(non_stop=True, interval=0, timeout=20)
         except Exception as e:
             logging.error(f"Error: {e}")
-            # if isinstance(e, telebot.apihelper.ApiException) and e.error_code == 403:
-            # 	logging.error("Bot was blocked by user")
             logging.info("Restarting bot in 5 seconds...")
             logging.exception("Stack trace of the exception")
             time.sleep(5)

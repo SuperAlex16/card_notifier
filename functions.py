@@ -11,7 +11,7 @@ from telebot import types
 
 from db_functions import get_db_connection
 from keyboards import create_calendar, cards_list_keyboard, recurrence_type_keyboard, \
-    transactions_type_keyboard, undo_save_transactions_to_db_keyboard
+    transactions_type_keyboard
 from keyboards import transaction_info_keyboard
 from logger import logging
 from settings import recurrent_count_months, reminder_today_times, reminder_tomorrow_time, \
@@ -124,7 +124,7 @@ def show_this_month(message, bot, chat_id):
     cursor.execute(
         f"""
             SELECT * FROM '{chat_id}'
-            WHERE date BETWEEN ? AND ? AND date >= ? AND execution_status = 0
+            WHERE date BETWEEN ? AND ? AND date >= ? AND execution_status = 0 AND is_active = 1
             ORDER BY date, transaction_type = 'снять'
         """, (start_of_month, end_of_month, current_date.isoformat())
     )
@@ -206,7 +206,7 @@ def ask_for_monthly_recurrence(bot, chat_id):
     bot.send_message(chat_id, "Повторять ежемесячно?", reply_markup=markup)
 
 
-def save_transactions_to_db(bot, chat_id, payment_uuid):
+def save_transactions_to_db(chat_id, payment_uuid):
     data = transaction_dict
 
     table_name = chat_id
@@ -770,7 +770,9 @@ def edit_transaction_data(message, payment_uuid, bot):
         conn.commit()
         conn.close()
 
-        bot.send_message(message.chat.id, "Транзакция успешно обновлена! 🥳 Теперь ты не пропустишь очередной платеж!")
+        bot.send_message(
+            message.chat.id, "Транзакция успешно обновлена! 🥳 Теперь ты не пропустишь очередной платеж!"
+        )
 
     except Exception as e:
         bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
@@ -880,9 +882,14 @@ def send_reminders(bot, chat_id):
     transaction_type_2 = db_transaction_types[2]
 
     current_datetime = datetime.now()
-    current_date = current_datetime.date().isoformat()  # Форматируем текущую дату как строку 'YYYY-MM-DD'
-    # print(current_date)
+    current_date = current_datetime.date().isoformat()
+    # logging.info(f"current date: {current_date}")
+
     current_time_str = current_datetime.time().strftime("%H:%M")
+    # logging.info(f"current time: {current_time_str}")
+
+    tomorrow_date = (datetime.fromisoformat(current_date) + timedelta(days=1)).date().isoformat()
+    # logging.info(f"tomorrow date: {tomorrow_date}")
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -900,37 +907,29 @@ def send_reminders(bot, chat_id):
     )
     rows = cursor.fetchall()
     conn.close()
-    logging.info(f"rows for send reminders: {rows}")
+    # logging.info(f"rows for send reminders: {rows}")
 
     for row in rows:
         payment_uuid = row['UUID']
         payment_date = row['date']  # Строка в формате 'YYYY-MM-DD'
-        # print(payment_date)
+        logging.info(f"payment date: {payment_date}")
         card_name = row['card_name']
         transaction_type = row['transaction_type']
         amount = row['amount']
-        execution_status = row['execution_status']
-
-        if isinstance(transaction_type, str):
-            transaction_type_lower = transaction_type.lower()
-        else:
-            transaction_type_lower = ""
-            logging.warning(f"Некорректный тип транзакции для UUID {payment_uuid}: {transaction_type}")
+        # execution_status = row['execution_status']
 
         # Проверка условий для отправки напоминания на сегодня
         if payment_date == current_date and current_time_str in reminder_today_times:
             logging.info(f'текущее время: {current_time_str}, время напоминания: {reminder_today_times}')
-            message_text = f"‼️ Братишка, не шути так! Срочно: {amount:,.2f} руб. {transaction_type_lower} по карте {card_name}"
-            send_reminder_with_buttons(payment_uuid, message_text, transaction_type_lower, bot, chat_id)
+            message_text = f"‼️ Братишка, не шути так! Срочно: {amount:,.2f} руб. {transaction_type} по карте {card_name}"
+            send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot, chat_id)
 
         # Проверка условий для отправки напоминания на завтра
-        elif payment_date == (datetime.fromisoformat(current_date) + timedelta(
-            days=1
-        )).isoformat() and current_time_str == reminder_tomorrow_time:
-            message_text = f"⏰ Не забудь: Завтра {transaction_type_lower} {amount:,.2f} руб. по карте {card_name}"
-            send_reminder_with_buttons(payment_uuid, message_text, transaction_type_lower, bot, chat_id)
+        elif payment_date == tomorrow_date and current_time_str == reminder_tomorrow_time:
+            message_text = f"⏰ Не забудь: Завтра {transaction_type} {amount:,.2f} руб. по карте {card_name}"
+            send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot, chat_id)
         else:
-            print("nothing to remind")
+            logging.info("nothing to remind or time to remind doesn't match")
 
 
 def run_scheduler():

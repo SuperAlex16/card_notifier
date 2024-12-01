@@ -3,18 +3,16 @@ import re
 from telebot import types
 
 from db_functions import init_db
-from functions import (add_transaction, ask_for_amount, ask_for_monthly_recurrence, ask_for_transaction_date,
-                       ask_for_card_name, ask_for_transaction_type, create_transactions_dict, create_uuid,
-                       done_transactions, save_transactions_to_db, show_today, transaction_dict,
-                       undo_save_transactions_to_db, undo_transactions, is_recurrence, delete_transactions,
-                       start_addition_process, show_nearest_days, show_this_month, create_recurring_payments,
-                       undo_delete_transactions)
+from functions import (ask_for_amount, ask_for_monthly_recurrence, ask_for_card_name,
+                       ask_for_transaction_type, create_transactions_dict, create_uuid, done_transactions,
+                       save_transactions_to_db, show_today, transaction_dict, undo_save_transactions_to_db,
+                       undo_transactions, is_recurrence, delete_transactions, start_addition_process,
+                       show_nearest_days, show_this_month, undo_delete_transactions)
 from keyboards import (create_calendar, main_menu_keyboard, nearest_menu_keyboard, start_keyboard,
-                       delete_transactions_keyboard, transactions_type_keyboard,
-                       undo_save_transactions_to_db_keyboard)
+                       delete_transactions_keyboard, undo_save_transactions_to_db_keyboard)
 from logger import logging
 from remind_func import run_reminders
-from settings import db_transaction_types, recurrent_count_months
+from settings import db_transaction_types
 
 user_states = {}
 
@@ -26,8 +24,8 @@ def register_handlers(bot):
         logging.info(f"id пользователя: {chat_id}")
         init_db(chat_id)
         logging.info("Таблица в БД активирована")
-        run_reminders(bot, chat_id)
-        logging.info(f"Запущен run_reminders для чата {chat_id}")
+        # run_reminders(bot, chat_id)
+        # logging.info(f"Запущен run_reminders для чата {chat_id}")
         logging.info(f"Пользователь {chat_id} запустил бота")
         markup = start_keyboard()
         bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}", reply_markup=markup)
@@ -79,10 +77,11 @@ def register_handlers(bot):
         amount = transaction_dict[chat_id]['amount']
         card = transaction_dict[chat_id]['card']
         bot.send_message(
-            chat_id, f"Добавлена повторяющаяся транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
+            chat_id,
+            f"Добавлена повторяющаяся транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
 
         )
-        save_transactions_to_db(bot, chat_id, payment_uuid=None)
+        save_transactions_to_db(chat_id, payment_uuid=None)
         markup = undo_save_transactions_to_db_keyboard(recurrence_id)
         bot.send_message(chat_id, "Отменить сохранение?", reply_markup=markup)
 
@@ -106,7 +105,7 @@ def register_handlers(bot):
             call.message.chat.id,
             f"Добавлена одиночная транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
         )
-        save_transactions_to_db(bot, chat_id, payment_uuid)
+        save_transactions_to_db(chat_id, payment_uuid)
         markup = undo_save_transactions_to_db_keyboard(payment_uuid)
         bot.send_message(chat_id, "Отменить сохранение?", reply_markup=markup)
 
