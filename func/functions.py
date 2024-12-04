@@ -4,7 +4,7 @@ from telebot import types
 from func.db_functions import get_db_connection
 from keyboards import transaction_info_keyboard
 from log.logger import logging
-from settings import db_transaction_types
+from settings import date_format, db_transaction_types
 from func.utils import get_weekday_short
 
 
@@ -21,7 +21,7 @@ def show_today(message, bot, chat_id):
             )
             date_obj = datetime.strptime(payment['date'].split()[0], '%Y-%m-%d')
 
-            formatted_date = date_obj.strftime('%d/%m/%Y')
+            formatted_date = date_obj.strftime(date_format)
             payment_str = (f"{formatted_date} ({weekday_short}),"
                            f" {payment['card_name']},"
                            f" {payment['transaction_type']}"
@@ -48,7 +48,9 @@ def show_nearest_days(message, days, bot):
                     payment['date'].split()[0], '%Y-%m-%d'
                 ).date()
             )
-            payment_str = f'{payment['date']} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб.'
+            date_obj = datetime.strptime(payment['date'].split()[0], '%Y-%m-%d')
+            formatted_date = date_obj.strftime(date_format)
+            payment_str = f"{formatted_date} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб."
             markup = types.InlineKeyboardMarkup()
 
             # Кнопки для выполнения, редактирования и удаления

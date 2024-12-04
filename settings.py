@@ -28,3 +28,5 @@ db_transaction_types = {
     1: "внести",
     2: "снять"
 }
+
+date_format = "%d/%m/%Y"
