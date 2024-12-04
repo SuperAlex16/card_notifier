@@ -50,7 +50,10 @@ def show_nearest_days(message, days, bot):
             )
             date_obj = datetime.strptime(payment['date'].split()[0], '%Y-%m-%d')
             formatted_date = date_obj.strftime(date_format)
-            payment_str = f"{formatted_date} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб."
+            payment_str = (f"{formatted_date} ({weekday_short}), "
+                           f"{payment['card_name']},"
+                           f" {payment['transaction_type']} "
+                           f"{payment['amount']:,.2f} руб.")
             markup = types.InlineKeyboardMarkup()
 
             # Кнопки для выполнения, редактирования и удаления
@@ -89,7 +92,12 @@ def show_this_month(message, bot, chat_id):
     if transactions:
         for payment in transactions:
             weekday_short = get_weekday_short(datetime.strptime(payment['date'], '%Y-%m-%d').date())
-            payment_str = f'{payment['date']} ({weekday_short}), {payment['card_name']}, {payment['transaction_type']} {payment['amount']:,.2f} руб.'
+            date_obj = datetime.strptime(payment['date'].split()[0], '%Y-%m-%d')
+            formatted_date = date_obj.strftime(date_format)
+            payment_str = (f"{formatted_date} ({weekday_short}), "
+                           f"{payment['card_name']},"
+                           f" {payment['transaction_type']} "
+                           f"{payment['amount']:,.2f} руб.")
             markup = types.InlineKeyboardMarkup()
 
             # Кнопки для выполнения, редактирования и удаления

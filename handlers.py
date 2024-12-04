@@ -76,14 +76,13 @@ def register_handlers(bot):
         transaction_type = transaction_dict[chat_id]['type']
         amount = transaction_dict[chat_id]['amount']
         card = transaction_dict[chat_id]['card']
-        bot.send_message(
-            chat_id,
-            f"Добавлена повторяющаяся транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
-
-        )
         save_transactions_to_db(chat_id, transaction_dict, payment_uuid=recurrence_id)
         markup = undo_save_transactions_to_db_keyboard(recurrence_id)
-        bot.send_message(chat_id, "Отменить сохранение?", reply_markup=markup)
+        bot.send_message(
+            chat_id,
+            f"Добавлена повторяющаяся транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n",
+            reply_markup=markup
+        )
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("no_recurrence"))
     def handle_recurrence_selection(call):
@@ -101,13 +100,13 @@ def register_handlers(bot):
         amount = transaction_dict[chat_id]['amount']
         card = transaction_dict[chat_id]['card']
 
-        bot.send_message(
-            call.message.chat.id,
-            f"Добавлена одиночная транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n"
-        )
         save_transactions_to_db(chat_id, transaction_dict, payment_uuid)
         markup = undo_save_transactions_to_db_keyboard(payment_uuid)
-        bot.send_message(chat_id, "Отменить сохранение?", reply_markup=markup)
+        bot.send_message(
+            chat_id,
+            f"Добавлена одиночная транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n",
+            reply_markup=markup
+            )
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("undo_add_transactions_"))
     def handle_undo_add_transactions(call):
