@@ -191,12 +191,12 @@ def undo_save_transactions_to_db_keyboard(payment_uuid=None, recurrence_id=None)
     markup = types.InlineKeyboardMarkup()
     if payment_uuid is not None:
         undo_add_transactions_button = types.InlineKeyboardButton(
-            "❌ Отменить", callback_data=f"undo_add_transactions_{payment_uuid}"
+            "❌ Отменить сохранение?", callback_data=f"undo_add_transactions_{payment_uuid}"
         )
         markup.add(undo_add_transactions_button)
     elif recurrence_id is not None:
         undo_add_transactions_button = types.InlineKeyboardButton(
-            "❌ Отменить", callback_data=f"undo_add_transactions_{recurrence_id}"
+            "❌ Отменить сохранение?", callback_data=f"undo_add_transactions_{recurrence_id}"
         )
         markup.add(undo_add_transactions_button)
     return markup

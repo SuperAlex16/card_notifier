@@ -77,19 +77,25 @@ def send_reminders(bot, chat_id):
     for row in rows:
         payment_uuid = row['UUID']
         payment_date = row['date']  # Строка в формате 'YYYY-MM-DD'
-        logging.info(f"payment date: {payment_date}")
         card_name = row['card_name']
         transaction_type = row['transaction_type']
         amount = row['amount']
 
         # Проверка условий для отправки напоминания на сегодня
         if payment_date == current_date and current_time_str in reminder_today_times:
-            logging.info(f'текущее время: {current_time_str}, время напоминания: {reminder_today_times}')
+            logging.info(
+                f"Today's reminder: текущее время: {current_time_str}, время напоминания:"
+                f" {reminder_today_times}"
+                )
             message_text = f"‼️ Братишка, не шути так! Срочно: {amount:,.2f} руб. {transaction_type} по карте {card_name}"
             send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot, chat_id)
 
         # Проверка условий для отправки напоминания на завтра
         elif payment_date == tomorrow_date and current_time_str == reminder_tomorrow_times:
+            logging.info(
+                f"Tomorrow's reminder: текущее время: {current_time_str}, время напоминания:"
+                f" {reminder_tomorrow_times}"
+                )
             message_text = f"⏰ Не забудь: Завтра {transaction_type} {amount:,.2f} руб. по карте {card_name}"
             send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot, chat_id)
         else:
