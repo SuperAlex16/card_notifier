@@ -8,11 +8,11 @@ from func.add_functions import ask_for_amount, ask_for_monthly_recurrence, ask_f
 from func.edit_functions import done_transactions, undone_transactions, delete_transactions, \
     undo_delete_transactions
 from func.functions import show_today, show_nearest_days, show_this_month
-from func.utils import create_transactions_dict, is_recurrence, create_uuid
+from func.utils import create_transactions_dict, exit_current_action, is_recurrence, create_uuid
 from keyboards import (create_calendar, main_menu_keyboard, nearest_menu_keyboard, start_keyboard,
                        delete_transactions_keyboard, undo_save_transactions_to_db_keyboard)
 from log.logger import logging
-from settings import db_transaction_types
+from settings import db_transaction_types, main_menu_keyboard_text
 
 user_states = {}
 transaction_dict = {}
@@ -106,7 +106,7 @@ def register_handlers(bot):
             chat_id,
             f"Добавлена одиночная транзакция\n📅 {date}\n🔄 {transaction_type}\n💰 {amount}\n💳 {card}\n",
             reply_markup=markup
-            )
+        )
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith("undo_add_transactions_"))
     def handle_undo_add_transactions(call):
@@ -178,6 +178,10 @@ def register_handlers(bot):
     def handle_card_name_input(message):
         chat_id = message.chat.id
         card_name = message.text.strip()
+        message = message.text
+
+        if exit_current_action(bot, chat_id, message, user_states):
+            return
 
         def is_valid_card_name(card_name):
             pattern = r'^[a-zA-Zа-яА-Я0-9 _-]+$'
@@ -206,6 +210,10 @@ def register_handlers(bot):
         chat_id = message.chat.id
         amount = message.text.strip()
         amount = re.sub(r"[^\d.]", ".", amount)
+        message = message.text
+
+        if exit_current_action(bot, chat_id, message, user_states):
+            return
 
         if "." in amount:
             integer_part, decimal_part = amount.split(".", 1)
@@ -234,13 +242,14 @@ def register_handlers(bot):
     @bot.message_handler(func=lambda message: True)
     def handle_menu(message):
         chat_id = message.chat.id
-        if message.text == "📅 Что сегодня?":
+
+        if message.text == main_menu_keyboard_text[1]:
             show_today(message, bot, chat_id)
-        elif message.text == "🔜 Ближайшие":
-            bot.send_message(message.chat.id, 'Выберите период:', reply_markup=nearest_menu_keyboard())
-        elif message.text == "➕ Добавить":
+        elif message.text == main_menu_keyboard_text[2]:
+            bot.send_message(message.chat.id, "Выберите период:", reply_markup=nearest_menu_keyboard())
+        elif message.text == main_menu_keyboard_text[3]:
             start_addition_process(bot, chat_id)
-        # elif message.text == '✏️ Редактировать':
+        # elif message.text == main_menu_keyboard_text[4]:
         #     edit_payments(message, bot)
         elif message.text == '3️⃣ дня':
             show_nearest_days(message, 3, bot)
@@ -261,7 +270,8 @@ def register_handlers(bot):
     def handle_callback_query(call):
         logging.info(f'Received callback: {call.data} from user {call.from_user.id}')
         chat_id = call.message.chat.id
-        # done
+        message_id = call.message.id
+        original_text = call.message.text
         if call.data.startswith('done_'):
             payment_uuid = call.data.replace('done_', '')
             done_transactions(chat_id, payment_uuid)
@@ -270,9 +280,10 @@ def register_handlers(bot):
             undo_button = types.InlineKeyboardButton('❌ Отменить', callback_data=f'undo_done_{payment_uuid}')
             markup.add(undo_button)
 
-            bot.send_message(
-                call.message.chat.id,
-                "Транзакция выполнена. Вы можете отменить действие:",
+            bot.edit_message_text(
+                f"{original_text} выполнена. Вы можете отменить действие:",
+                chat_id,
+                message_id,
                 reply_markup=markup
             )
 
@@ -280,7 +291,9 @@ def register_handlers(bot):
             payment_uuid = call.data.replace('undo_done_', '')
             undone_transactions(chat_id, payment_uuid)
 
-            bot.send_message(call.message.chat.id, "Выполнение отменено. Транзакция восстановлена.")
+            bot.edit_message_text(
+                f"Выполнение отменено. {original_text} восстановлена.", chat_id, message_id
+            )
 
         elif call.data.startswith("delete_"):
             payment_uuid = call.data.replace("delete_", "")
