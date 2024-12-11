@@ -8,7 +8,7 @@ from func.add_functions import ask_for_amount, ask_for_monthly_recurrence, ask_f
 from func.edit_functions import done_transactions, undone_transactions, delete_transactions, \
     undo_delete_transactions
 from func.functions import show_today, show_nearest_days, show_this_month
-from func.utils import create_transactions_dict, is_recurrence, create_uuid
+from func.utils import create_transactions_dict, exit_current_action, is_recurrence, create_uuid
 from keyboards import (create_calendar, main_menu_keyboard, nearest_menu_keyboard, start_keyboard,
                        delete_transactions_keyboard, undo_save_transactions_to_db_keyboard)
 from log.logger import logging
@@ -178,10 +178,9 @@ def register_handlers(bot):
     def handle_card_name_input(message):
         chat_id = message.chat.id
         card_name = message.text.strip()
+        message = message.text
 
-        if message.text in main_menu_keyboard_text.values():
-            user_states.pop(chat_id, None)
-            bot.send_message(chat_id, "Вы вышли из текущего действия. Пожалуйста, выберите опцию из меню.")
+        if exit_current_action(bot, chat_id, message, user_states):
             return
 
         def is_valid_card_name(card_name):
@@ -211,10 +210,9 @@ def register_handlers(bot):
         chat_id = message.chat.id
         amount = message.text.strip()
         amount = re.sub(r"[^\d.]", ".", amount)
+        message = message.text
 
-        if message.text in main_menu_keyboard_text.values():
-            user_states.pop(chat_id, None)
-            bot.send_message(chat_id, "Вы вышли из текущего действия. Пожалуйста, выберите опцию из меню.")
+        if exit_current_action(bot, chat_id, message, user_states):
             return
 
         if "." in amount:
