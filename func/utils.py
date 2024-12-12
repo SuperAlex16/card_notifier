@@ -53,5 +53,4 @@ def exit_current_action(bot, chat_id, message, user_states):
         user_states.pop(chat_id, None)
         bot.send_message(chat_id, "Вы вышли из текущего действия. Пожалуйста, выберите опцию из меню.")
         return True
-    else:
-        return False
+    return False
