@@ -4,9 +4,10 @@ import telebot
 import time
 
 from dotenv import load_dotenv
+from func.remind_functions import run_reminders
 from handlers import register_handlers
 from log.logger import logging
-from func.remind_functions import run_reminders
+
 
 load_dotenv()
 

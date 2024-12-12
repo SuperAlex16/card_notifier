@@ -1,6 +1,7 @@
 import uuid
 
 from func.db_functions import get_db_connection
+from settings import main_menu_keyboard_text
 
 
 def create_uuid():
@@ -35,7 +36,6 @@ def is_recurrence(chat_id, payment_uuid):
         result = cursor.fetchone()
     finally:
         conn.close()
-    # print(f"is_recurrence: {result.keys()}")
     recurrence_id = result["recurrence_id"]
     return recurrence_id if result else None
 
@@ -46,3 +46,11 @@ def create_transactions_dict(chat_id, key, value, transaction_dict):
 
     transaction_dict[chat_id][key] = value
     return transaction_dict
+
+
+def exit_current_action(bot, chat_id, message, user_states):
+    if message in main_menu_keyboard_text.values():
+        user_states.pop(chat_id, None)
+        bot.send_message(chat_id, "Вы вышли из текущего действия. Пожалуйста, выберите опцию из меню.")
+        return True
+    return False

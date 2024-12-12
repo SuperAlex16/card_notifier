@@ -207,7 +207,7 @@ def send_reminder_keyboard(payment_uuid, transaction_type):
     if transaction_type == db_transaction_types[1]:
         button = types.InlineKeyboardButton("☑️ Уже внес", callback_data=f"done_{payment_uuid}")
     elif transaction_type == db_transaction_types[2]:
-        button = types.InlineKeyboardButton("✅ Уже снял", callback_data=f"withdrawn_{payment_uuid}")
+        button = types.InlineKeyboardButton("✅ Уже снял", callback_data=f"done_{payment_uuid}")
     else:
         button = types.InlineKeyboardButton("✅ Выполнено", callback_data=f"done_{payment_uuid}")
     markup.add(button)

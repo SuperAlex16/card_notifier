@@ -86,7 +86,7 @@ def send_reminders(bot, chat_id):
             logging.info(
                 f"Today's reminder: текущее время: {current_time_str}, время напоминания:"
                 f" {reminder_today_times}"
-                )
+            )
             message_text = f"‼️ Братишка, не шути так! Срочно: {amount:,.2f} руб. {transaction_type} по карте {card_name}"
             send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot, chat_id)
 
@@ -95,7 +95,7 @@ def send_reminders(bot, chat_id):
             logging.info(
                 f"Tomorrow's reminder: текущее время: {current_time_str}, время напоминания:"
                 f" {reminder_tomorrow_times}"
-                )
+            )
             message_text = f"⏰ Не забудь: Завтра {transaction_type} {amount:,.2f} руб. по карте {card_name}"
             send_reminder_with_buttons(payment_uuid, message_text, transaction_type, bot, chat_id)
         else:
