@@ -134,7 +134,8 @@ def cards_list_keyboard(chat_id):
         try:
             cursor.execute(
                 f"""
-                            SElECT DISTINCT "card_name" FROM "{chat_id}"
+                            SElECT DISTINCT "card_name" FROM transactions
+                            WHERE user_id = {chat_id}
                             """
             )
             unique_card_names = cursor.fetchall()

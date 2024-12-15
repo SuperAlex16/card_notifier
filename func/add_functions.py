@@ -42,7 +42,7 @@ def ask_for_monthly_recurrence(bot, chat_id):
 def save_transactions_to_db(chat_id, transaction_dict, payment_uuid):
     data = transaction_dict
 
-    table_name = chat_id
+    user_id = chat_id
 
     date_obj = datetime(
         year=data[chat_id]['date']['year'],
@@ -63,10 +63,11 @@ def save_transactions_to_db(chat_id, transaction_dict, payment_uuid):
         if recurrence_id is None:
             cursor.execute(
                 f"""
-                INSERT INTO '{table_name}' (uuid, date, card_name, transaction_type, amount, execution_status,
+                INSERT INTO transactions (uuid, user_id, date, card_name, transaction_type, amount, 
+                execution_status,
                 recurrence_id, is_active)
-                VALUES (?, ?, ?, ?, ?, 0, ?, 1)
-                """, (payment_uuid, date, card_name, transaction_type, amount, recurrence_id)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?, 1)
+                """, (payment_uuid, user_id, date, card_name, transaction_type, amount, recurrence_id)
             )
             logging.info(f"Single transaction {payment_uuid} was saved")
         else:
@@ -76,9 +77,9 @@ def save_transactions_to_db(chat_id, transaction_dict, payment_uuid):
                 payment_uuid = create_uuid()
                 cursor.execute(
                     f"""
-                    INSERT INTO '{table_name}' (uuid, date, card_name, transaction_type, amount, execution_status,
-                    recurrence_id, is_active)
-                    VALUES (?, ?, ?, ?, ?, 0, ?, 1)
+                    INSERT INTO transactions (uuid, user_id, date, card_name, transaction_type, amount, 
+                        execution_status, recurrence_id, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, ?, 1)
                     """,
                     (payment_uuid, recurrenced_date.date().isoformat(), card_name, transaction_type, amount,
                      recurrence_id)
@@ -101,11 +102,11 @@ def undo_save_transactions_to_db(chat_id, action_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    table_name = chat_id
     try:
         cursor.execute(
-            f"""DELETE FROM "{table_name}"
-            WHERE "UUID" = ? OR "recurrence_id" = ?
+            f"""DELETE FROM transactions
+            WHERE user_id = {chat_id}
+                AND "UUID" = ? OR "recurrence_id" = ?
         """, (action_id, action_id)
         )
         conn.commit()

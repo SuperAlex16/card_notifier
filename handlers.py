@@ -2,7 +2,6 @@ import re
 
 from telebot import types
 
-from func.db_functions import init_db
 from func.add_functions import ask_for_amount, ask_for_monthly_recurrence, ask_for_card_name, \
     save_transactions_to_db, undo_save_transactions_to_db, ask_for_transaction_type, start_addition_process
 from func.edit_functions import done_transactions, undone_transactions, delete_transactions, \
@@ -23,8 +22,6 @@ def register_handlers(bot):
     def handle_start_button(message):
         chat_id = message.chat.id
         logging.info(f"id пользователя: {chat_id}")
-        init_db(chat_id)
-        logging.info("Таблица в БД активирована")
         logging.info(f"Запущен run_reminders для чата {chat_id}")
         logging.info(f"Пользователь {chat_id} запустил бота")
         markup = start_keyboard()

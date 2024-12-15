@@ -29,9 +29,9 @@ def is_recurrence(chat_id, payment_uuid):
         cursor.execute(
             f"""
 			SELECT recurrence_id 
-			FROM '{chat_id}'
-			WHERE UUID = ?
-			""", (payment_uuid,)
+			FROM transactions
+			WHERE user_id = ? AND UUID = ?
+			""", (chat_id, payment_uuid,)
         )
         result = cursor.fetchone()
     finally:

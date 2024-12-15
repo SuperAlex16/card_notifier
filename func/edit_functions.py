@@ -8,21 +8,22 @@ def delete_transactions(chat_id, payment_id=None, recurrence_id=None):
     try:
         if recurrence_id:
             cursor.execute(
-                f"""
-                        UPDATE '{chat_id}' 
-                        SET is_active = 0 
-                        WHERE recurrence_id = ?
-                        """, (recurrence_id,)
+                """
+                UPDATE transactions
+                SET is_active = 0
+                WHERE user_id = ? AND recurrence_id = ?;
+                """, (chat_id, recurrence_id)
             )
+
             conn.commit()
 
         elif payment_id:
             cursor.execute(
-                f"""
-                        UPDATE '{chat_id}' 
+                """
+                        UPDATE transactions 
                         SET is_active = 0 
-                        WHERE UUID = ?
-                        """, (payment_id,)
+                        WHERE user_id = ? AND UUID = ?
+                        """, (chat_id, payment_id,)
             )
             conn.commit()
     except Exception as e:
@@ -38,20 +39,20 @@ def undo_delete_transactions(chat_id, payment_id=None, recurrence_id=None, ):
         if recurrence_id:
             cursor.execute(
                 f"""
-                        UPDATE '{chat_id}' 
+                        UPDATE transactions
                         SET is_active = 1 
-                        WHERE recurrence_id = ?
-                        """, (recurrence_id,)
+                        WHERE user_id = ? AND recurrence_id = ?
+                        """, (chat_id, recurrence_id,)
             )
             conn.commit()
 
         elif payment_id:
             cursor.execute(
                 f"""
-                        UPDATE '{chat_id}' 
+                        UPDATE transactions 
                         SET is_active = 1 
-                        WHERE UUID = ?
-                        """, (payment_id,)
+                        WHERE user_id = ? AND UUID = ?
+                        """, (chat_id, payment_id,)
             )
             conn.commit()
     except Exception as e:
@@ -67,20 +68,20 @@ def done_transactions(chat_id, payment_uuid=None, recurrence_id=None):
         if recurrence_id:
             cursor.execute(
                 f"""
-                            UPDATE '{chat_id}' 
+                            UPDATE transactions
                             SET execution_status = 1, is_active = 0
-                            WHERE recurrence_id = ?
-                            """, (recurrence_id,)
+                            WHERE user_id = ? AND recurrence_id = ?
+                            """, (chat_id, recurrence_id,)
             )
             conn.commit()
 
         elif payment_uuid:
             cursor.execute(
                 f"""
-                            UPDATE '{chat_id}' 
+                            UPDATE transactions 
                             SET execution_status = 1, is_active = 0 
-                            WHERE UUID = ?
-                            """, (payment_uuid,)
+                            WHERE user_id = ? AND UUID = ?
+                            """, (chat_id, payment_uuid,)
             )
             conn.commit()
     except Exception as e:
@@ -96,20 +97,20 @@ def undone_transactions(chat_id, payment_uuid=None, recurrence_id=None):
         if recurrence_id:
             cursor.execute(
                 f"""
-                            UPDATE '{chat_id}' 
+                            UPDATE transactions
                             SET execution_status = 0, is_active = 1
-                            WHERE recurrence_id = ?
-                            """, (recurrence_id,)
+                            WHERE user_id = ? AND recurrence_id = ?
+                            """, (chat_id, recurrence_id,)
             )
             conn.commit()
 
         elif payment_uuid:
             cursor.execute(
                 f"""
-                            UPDATE '{chat_id}' 
+                            UPDATE transactions 
                             SET execution_status = 0, is_active = 1
-                            WHERE UUID = ?
-                            """, (payment_uuid,)
+                            WHERE user_id = ? AND UUID = ?
+                            """, (chat_id, payment_uuid,)
             )
             conn.commit()
     except Exception as e:
