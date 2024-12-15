@@ -10,15 +10,14 @@ from log.logger import logging
 from settings import db_transaction_types, reminder_period, reminder_today_times, reminder_tomorrow_times
 
 
-def get_active_id_to_remind():
+def get_active_user_id_to_remind():
     conn = get_db_connection()
     cursor = conn.cursor()
     with conn:
         cursor.execute(
             f"""
-                        SELECT name 
-                        FROM sqlite_master 
-                        WHERE type='table';
+                        SELECT DISTINCT user_id
+                        FROM transactions;
                         """
         )
         tables = cursor.fetchall()
@@ -27,7 +26,7 @@ def get_active_id_to_remind():
 
 
 def run_reminders(bot):
-    active_chats = get_active_id_to_remind()
+    active_chats = get_active_user_id_to_remind()
     for chat_id in active_chats:
         scheduler_thread = threading.Thread(
             target=run_scheduler_with_reminders, args=(bot, chat_id), daemon=True
@@ -45,7 +44,7 @@ def run_scheduler_with_reminders(bot, chat_id):
 
 
 def send_reminders(bot, chat_id):
-    logging.info('send_reminders запущен')
+    logging.info('send_reminders started')
 
     transaction_type_1 = db_transaction_types[1]
     transaction_type_2 = db_transaction_types[2]
@@ -61,9 +60,10 @@ def send_reminders(bot, chat_id):
     cursor = conn.cursor()
     cursor.execute(
         f"""
-                SELECT * FROM '{chat_id}'
-                WHERE execution_status = 0
-                AND is_active = 1
+                SELECT * FROM transactions
+                WHERE user_id = {chat_id} 
+                    AND execution_status = 0
+                    AND is_active = 1
                 ORDER BY date,
                 CASE 
                     WHEN transaction_type = ? THEN 1

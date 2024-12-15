@@ -81,8 +81,11 @@ def show_this_month(message, bot, chat_id):
     cursor = conn.cursor()
     cursor.execute(
         f"""
-            SELECT * FROM '{chat_id}'
-            WHERE date BETWEEN ? AND ? AND date >= ? AND execution_status = 0 AND is_active = 1
+            SELECT * FROM transactions
+            WHERE user_id = {chat_id}
+                AND date BETWEEN ? AND ? AND date >= ? 
+                AND execution_status = 0 
+                AND is_active = 1
             ORDER BY date, transaction_type = 'снять'
         """, (start_of_month, end_of_month, current_date.isoformat())
     )
@@ -124,8 +127,9 @@ def get_transactions_by_date(date, chat_id):
 
     cursor.execute(
         f"""
-        SELECT * FROM "{chat_id}"
-        WHERE date = ? 
+        SELECT * FROM transactions
+        WHERE user_id = {chat_id}
+            AND date = ? 
             AND execution_status = 0 
             AND is_active = 1
         ORDER BY date,
@@ -150,8 +154,9 @@ def get_transactions_in_date_range(start_date, end_date, message):
     cursor = conn.cursor()
     cursor.execute(
         f"""
-                SELECT * FROM '{chat_id}'
-                WHERE date BETWEEN ? AND ? 
+                SELECT * FROM transactions
+                WHERE user_id = {chat_id}
+                    AND date BETWEEN ? AND ? 
                     AND execution_status = 0
                     AND is_active = 1
                 ORDER BY date,
